@@ -17,12 +17,17 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
 button {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 a {
@@ -56,6 +61,10 @@ a {
   letter-spacing: 0.04em;
 }
 
+.linkLogo {
+  text-decoration: none;
+}
+
 .logo {
   height: 42px;
   width: 42px;
@@ -73,12 +82,17 @@ a {
 }
 
 .secondaryButton,
-.primaryButton {
+.primaryButton,
+.dangerButton {
   min-height: 46px;
   border-radius: 12px;
   padding: 11px 16px;
   border: 1px solid #27272a;
-  transition: background 0.2s, border-color 0.2s;
+  transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .secondaryButton {
@@ -99,6 +113,24 @@ a {
 
 .primaryButton:hover {
   background: #e4e4e7;
+}
+
+.dangerButton {
+  background: transparent;
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+
+.dangerButton:hover {
+  background: #1f0f0f;
+}
+
+.linkButton {
+  text-decoration: none;
+}
+
+.fullButton {
+  width: 100%;
 }
 
 .main {
@@ -360,6 +392,129 @@ a {
   font-size: 14px;
 }
 
+.adminPanel {
+  max-width: 560px;
+  margin: 70px auto;
+  padding: 28px;
+  border: 1px solid #27272a;
+  border-radius: 20px;
+  background: #0c0c0f;
+}
+
+.adminPanel.wide {
+  max-width: 100%;
+  margin: 44px 0;
+}
+
+.adminTitle {
+  margin: 0;
+  font-size: 36px;
+  letter-spacing: -0.04em;
+}
+
+.adminSubTitle {
+  margin: 0 0 20px;
+  font-size: 22px;
+}
+
+.adminText {
+  color: #a1a1aa;
+  line-height: 1.7;
+}
+
+.adminForm {
+  margin-top: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.formLabel {
+  display: grid;
+  gap: 8px;
+  color: #d4d4d8;
+  font-size: 14px;
+}
+
+.formInput,
+.formTextarea {
+  width: 100%;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  background: #18181b;
+  color: #f4f4f5;
+  outline: none;
+}
+
+.formInput {
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.formTextarea {
+  min-height: 110px;
+  resize: vertical;
+  padding: 14px;
+}
+
+.formInput:focus,
+.formTextarea:focus {
+  border-color: #52525b;
+}
+
+.checkboxLabel {
+  align-content: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+}
+
+.formMessage {
+  margin: 0;
+  color: #facc15;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.adminTrackList {
+  display: grid;
+  gap: 14px;
+}
+
+.adminTrackCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid #27272a;
+  border-radius: 16px;
+  background: #09090b;
+}
+
+.adminTrackCard h3 {
+  margin: 0 0 8px;
+}
+
+.adminTrackCard p {
+  margin: 4px 0;
+  color: #a1a1aa;
+  font-size: 14px;
+}
+
+.adminActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 @media (max-width: 700px) {
   .headerInner,
   .main,
@@ -376,7 +531,8 @@ a {
     font-size: 14px;
   }
 
-  .primaryButton {
+  .primaryButton,
+  .secondaryButton {
     padding-left: 12px;
     padding-right: 12px;
     font-size: 13px;
@@ -415,5 +571,18 @@ a {
   .trackActions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .adminTrackCard {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .adminActions {
+    justify-content: flex-start;
   }
 }
