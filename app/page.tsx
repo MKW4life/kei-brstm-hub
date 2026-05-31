@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -13,6 +14,8 @@ type Track = {
   description: string;
   brstm_url: string;
   preview_url: string;
+  brstm_lap3_url: string;
+  preview_lap3_url: string;
   download_count: number;
   created_at: string;
 };
@@ -33,6 +36,8 @@ const translations = {
     published: "公開中のBRSTM",
     slot: "対応スロット",
     example: "使用例CT",
+    normal: "通常",
+    lap3: "Lap 3",
     preview: "試聴",
     stop: "停止",
     download: "ダウンロード",
@@ -60,6 +65,8 @@ const translations = {
     published: "Available BRSTMs",
     slot: "Slot",
     example: "Example CT",
+    normal: "Normal",
+    lap3: "Lap 3",
     preview: "Preview",
     stop: "Stop",
     download: "Download",
@@ -90,34 +97,13 @@ export default function Home() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [playingId, setPlayingId] = useState<number | null>(null);
+  const [playingKey, setPlayingKey] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const t = translations[language];
 
   useEffect(() => {
-    async function loadTracks() {
-      setLoading(true);
-      setLoadError(false);
-
-      const { data, error } = await supabase
-        .from("tracks")
-        .select("*")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Failed to load tracks:", error);
-        setLoadError(true);
-        setLoading(false);
-        return;
-      }
-
-      setTracks((data as Track[]) ?? []);
-      setLoading(false);
-    }
-
     loadTracks();
   }, []);
 
@@ -129,6 +115,27 @@ export default function Home() {
       }
     };
   }, []);
+
+  async function loadTracks() {
+    setLoading(true);
+    setLoadError(false);
+
+    const { data, error } = await supabase
+      .from("tracks")
+      .select("*")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load tracks:", error);
+      setLoadError(true);
+      setLoading(false);
+      return;
+    }
+
+    setTracks((data as Track[]) ?? []);
+    setLoading(false);
+  }
 
   const visibleTracks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -169,17 +176,19 @@ export default function Home() {
     { value: "その他BGM", label: t.other },
   ];
 
-  async function handlePreview(track: Track) {
-    if (!track.preview_url) {
+  async function handlePreview(track: Track, previewUrl: string, label: string) {
+    if (!previewUrl) {
       window.alert(t.noPreview);
       return;
     }
 
-    if (playingId === track.id && audioRef.current) {
+    const key = `${track.id}-${label}`;
+
+    if (playingKey === key && audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current = null;
-      setPlayingId(null);
+      setPlayingKey(null);
       return;
     }
 
@@ -188,40 +197,103 @@ export default function Home() {
       audioRef.current.currentTime = 0;
     }
 
-    const nextAudio = new Audio(track.preview_url);
+    const nextAudio = new Audio(previewUrl);
 
     nextAudio.addEventListener("ended", () => {
-      setPlayingId(null);
+      setPlayingKey(null);
       audioRef.current = null;
     });
 
     nextAudio.addEventListener("error", () => {
-      setPlayingId(null);
+      setPlayingKey(null);
       audioRef.current = null;
       window.alert(t.previewError);
     });
 
     audioRef.current = nextAudio;
-    setPlayingId(track.id);
+    setPlayingKey(key);
 
     try {
       await nextAudio.play();
     } catch (error) {
       console.error("Failed to play preview:", error);
       audioRef.current = null;
-      setPlayingId(null);
+      setPlayingKey(null);
       window.alert(t.previewError);
     }
+  }
+
+  async function handleDownload(track: Track) {
+    const { error } = await supabase.rpc("increment_download_count", {
+      track_id: track.id,
+    });
+
+    if (error) {
+      console.error("Failed to increment download count:", error);
+      return;
+    }
+
+    setTracks((currentTracks) =>
+      currentTracks.map((item) =>
+        item.id === track.id
+          ? { ...item, download_count: item.download_count + 1 }
+          : item
+      )
+    );
+  }
+
+  function renderFileButtons(
+    track: Track,
+    label: string,
+    previewUrl: string,
+    brstmUrl: string
+  ) {
+    const key = `${track.id}-${label}`;
+
+    return (
+      <div className="fileButtonGroup">
+        <span className="fileLabel">{label}</span>
+
+        <button
+          className={
+            playingKey === key ? "playButton small playing" : "playButton small"
+          }
+          type="button"
+          onClick={() => handlePreview(track, previewUrl, label)}
+        >
+          {playingKey === key ? "■" : "▶"}
+        </button>
+
+        {brstmUrl ? (
+          <a
+            className="downloadButton"
+            href={createDownloadUrl(brstmUrl)}
+            onClick={() => handleDownload(track)}
+          >
+            {t.download}
+          </a>
+        ) : (
+          <button
+            className="downloadButton"
+            type="button"
+            disabled
+            title={t.noDownload}
+          >
+            {t.download}
+          </button>
+        )}
+      </div>
+    );
   }
 
   return (
     <div className="page">
       <header className="header">
         <div className="headerInner">
-          <div className="logoArea">
+          <Link className="logoArea linkLogo" href="/">
             <div className="logo">♫</div>
             <span>Kei BRSTM Hub</span>
-          </div>
+          </Link>
 
           <div className="headerButtons">
             <button
@@ -232,9 +304,9 @@ export default function Home() {
               {language === "ja" ? "EN" : "JP"}
             </button>
 
-            <button className="primaryButton" type="button">
+            <Link className="primaryButton linkButton" href="/admin/login">
               {t.admin}
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -298,21 +370,6 @@ export default function Home() {
             <div className="trackList">
               {visibleTracks.map((track) => (
                 <article className="trackCard" key={track.id}>
-                  <button
-                    className={
-                      playingId === track.id
-                        ? "playButton playing"
-                        : "playButton"
-                    }
-                    type="button"
-                    aria-label={`${track.title} - ${
-                      playingId === track.id ? t.stop : t.preview
-                    }`}
-                    onClick={() => handlePreview(track)}
-                  >
-                    {playingId === track.id ? "■" : "▶"}
-                  </button>
-
                   <div className="trackInfo">
                     <div className="trackTitleRow">
                       <h3>{track.title}</h3>
@@ -335,27 +392,23 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="trackActions">
+                  <div className="trackActions vertical">
                     <span className="downloadCount">
                       ↓ {track.download_count}
                     </span>
 
-                    {track.brstm_url ? (
-                      <a
-                        className="downloadButton"
-                        href={createDownloadUrl(track.brstm_url)}
-                      >
-                        {t.download}
-                      </a>
-                    ) : (
-                      <button
-                        className="downloadButton"
-                        type="button"
-                        disabled
-                        title={t.noDownload}
-                      >
-                        {t.download}
-                      </button>
+                    {renderFileButtons(
+                      track,
+                      t.normal,
+                      track.preview_url,
+                      track.brstm_url
+                    )}
+
+                    {renderFileButtons(
+                      track,
+                      t.lap3,
+                      track.preview_lap3_url,
+                      track.brstm_lap3_url
                     )}
                   </div>
                 </article>

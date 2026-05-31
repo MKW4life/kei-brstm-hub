@@ -40,11 +40,15 @@ a {
 }
 
 .header {
+  position: relative;
+  z-index: 100;
   border-bottom: 1px solid #18181b;
   background: rgba(9, 9, 11, 0.95);
 }
 
 .headerInner {
+  position: relative;
+  z-index: 101;
   max-width: 1120px;
   margin: 0 auto;
   padding: 20px 24px;
@@ -77,6 +81,8 @@ a {
 }
 
 .headerButtons {
+  position: relative;
+  z-index: 102;
   display: flex;
   gap: 10px;
 }
@@ -93,6 +99,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
 }
 
 .secondaryButton {
@@ -293,6 +300,12 @@ a {
   color: #09090b;
 }
 
+.playButton.small {
+  height: 44px;
+  width: 44px;
+  border-radius: 12px;
+}
+
 .trackInfo {
   flex: 1;
   min-width: 0;
@@ -345,10 +358,29 @@ a {
   gap: 18px;
 }
 
+.trackActions.vertical {
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .downloadCount {
   color: #71717a;
   font-size: 14px;
   white-space: nowrap;
+}
+
+.fileButtonGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fileLabel {
+  min-width: 58px;
+  color: #a1a1aa;
+  font-size: 13px;
+  text-align: right;
 }
 
 .downloadButton {
@@ -560,7 +592,7 @@ a {
   }
 
   .trackInfo {
-    width: calc(100% - 70px);
+    width: 100%;
   }
 
   .trackMeta {
@@ -570,6 +602,14 @@ a {
 
   .trackActions {
     width: 100%;
+    justify-content: flex-end;
+  }
+
+  .trackActions.vertical {
+    align-items: stretch;
+  }
+
+  .fileButtonGroup {
     justify-content: flex-end;
   }
 

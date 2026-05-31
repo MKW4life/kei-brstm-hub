@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -14,6 +15,8 @@ type Track = {
   description: string;
   brstm_url: string;
   preview_url: string;
+  brstm_lap3_url: string;
+  preview_lap3_url: string;
   download_count: number;
   is_published: boolean;
   created_at: string;
@@ -47,8 +50,11 @@ export default function AdminPage() {
   const [exampleCt, setExampleCt] = useState("");
   const [description, setDescription] = useState("");
   const [isPublished, setIsPublished] = useState(true);
+
   const [brstmFile, setBrstmFile] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [brstmLap3File, setBrstmLap3File] = useState<File | null>(null);
+  const [previewLap3File, setPreviewLap3File] = useState<File | null>(null);
 
   useEffect(() => {
     async function checkLogin() {
@@ -108,7 +114,7 @@ export default function AdminPage() {
     }
 
     if (!brstmFile) {
-      setMessage(".brstm ファイルを選択してください。");
+      setMessage("通常用 .brstm ファイルを選択してください。");
       return;
     }
 
@@ -116,8 +122,17 @@ export default function AdminPage() {
 
     try {
       const brstmUrl = await uploadFile("brstm-files", brstmFile);
+
       const previewUrl = previewFile
         ? await uploadFile("previews", previewFile)
+        : "";
+
+      const brstmLap3Url = brstmLap3File
+        ? await uploadFile("brstm-files", brstmLap3File)
+        : "";
+
+      const previewLap3Url = previewLap3File
+        ? await uploadFile("previews", previewLap3File)
         : "";
 
       const { error } = await supabase.from("tracks").insert({
@@ -129,6 +144,8 @@ export default function AdminPage() {
         description,
         brstm_url: brstmUrl,
         preview_url: previewUrl,
+        brstm_lap3_url: brstmLap3Url,
+        preview_lap3_url: previewLap3Url,
         is_published: isPublished,
       });
 
@@ -145,17 +162,21 @@ export default function AdminPage() {
       setIsPublished(true);
       setBrstmFile(null);
       setPreviewFile(null);
+      setBrstmLap3File(null);
+      setPreviewLap3File(null);
       setMessage("曲を追加しました。");
 
-      const brstmInput = document.getElementById(
-        "brstmFile"
-      ) as HTMLInputElement | null;
-      const previewInput = document.getElementById(
-        "previewFile"
-      ) as HTMLInputElement | null;
+      const inputIds = [
+        "brstmFile",
+        "previewFile",
+        "brstmLap3File",
+        "previewLap3File",
+      ];
 
-      if (brstmInput) brstmInput.value = "";
-      if (previewInput) previewInput.value = "";
+      for (const id of inputIds) {
+        const input = document.getElementById(id) as HTMLInputElement | null;
+        if (input) input.value = "";
+      }
 
       await loadTracks();
     } catch (error) {
@@ -212,6 +233,14 @@ export default function AdminPage() {
     setPreviewFile(event.target.files?.[0] ?? null);
   }
 
+  function handleBrstmLap3Change(event: ChangeEvent<HTMLInputElement>) {
+    setBrstmLap3File(event.target.files?.[0] ?? null);
+  }
+
+  function handlePreviewLap3Change(event: ChangeEvent<HTMLInputElement>) {
+    setPreviewLap3File(event.target.files?.[0] ?? null);
+  }
+
   if (checking) {
     return (
       <div className="page">
@@ -226,15 +255,16 @@ export default function AdminPage() {
     <div className="page">
       <header className="header">
         <div className="headerInner">
-          <a className="logoArea linkLogo" href="/">
+          <Link className="logoArea linkLogo" href="/">
             <div className="logo">♫</div>
             <span>Kei BRSTM Hub</span>
-          </a>
+          </Link>
 
           <div className="headerButtons">
-            <a className="secondaryButton linkButton" href="/">
+            <Link className="secondaryButton linkButton" href="/">
               サイトを見る
-            </a>
+            </Link>
+
             <button className="primaryButton" type="button" onClick={handleLogout}>
               ログアウト
             </button>
@@ -326,7 +356,7 @@ export default function AdminPage() {
 
             <div className="formGrid">
               <label className="formLabel">
-                BRSTMファイル
+                通常用 BRSTM
                 <input
                   id="brstmFile"
                   className="formInput"
@@ -338,13 +368,35 @@ export default function AdminPage() {
               </label>
 
               <label className="formLabel">
-                プレビュー音源
+                通常用プレビュー音源
                 <input
                   id="previewFile"
                   className="formInput"
                   type="file"
                   accept=".wav,.mp3,.ogg"
                   onChange={handlePreviewChange}
+                />
+              </label>
+
+              <label className="formLabel">
+                Lap 3用 BRSTM
+                <input
+                  id="brstmLap3File"
+                  className="formInput"
+                  type="file"
+                  accept=".brstm"
+                  onChange={handleBrstmLap3Change}
+                />
+              </label>
+
+              <label className="formLabel">
+                Lap 3用プレビュー音源
+                <input
+                  id="previewLap3File"
+                  className="formInput"
+                  type="file"
+                  accept=".wav,.mp3,.ogg"
+                  onChange={handlePreviewLap3Change}
                 />
               </label>
             </div>
@@ -373,6 +425,10 @@ export default function AdminPage() {
                   <p>
                     {track.category} / {track.slot_name || "-"} /{" "}
                     {track.example_ct || "-"}
+                  </p>
+                  <p>
+                    通常: {track.brstm_url ? "BRSTMあり" : "BRSTMなし"} /{" "}
+                    Lap 3: {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"}
                   </p>
                   <p>{track.is_published ? "公開中" : "非公開"}</p>
                 </div>
