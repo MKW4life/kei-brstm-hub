@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 type Track = {
   id: number;
   title: string;
+  title_en: string;
   source: string;
   category: string;
   slot_name: string;
@@ -46,6 +47,7 @@ export default function AdminPage() {
   const [editing, setEditing] = useState(false);
 
   const [title, setTitle] = useState("");
+  const [titleEn, setTitleEn] = useState("");
   const [source, setSource] = useState("");
   const [category, setCategory] = useState("Wiiコース");
   const [slotName, setSlotName] = useState("");
@@ -61,6 +63,7 @@ export default function AdminPage() {
 
   const [editingTrackId, setEditingTrackId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [editTitleEn, setEditTitleEn] = useState("");
   const [editSource, setEditSource] = useState("");
   const [editCategory, setEditCategory] = useState("Wiiコース");
   const [editSlotName, setEditSlotName] = useState("");
@@ -122,7 +125,7 @@ export default function AdminPage() {
     setMessage("");
 
     if (!title.trim()) {
-      setMessage("曲名を入力してください。");
+      setMessage("日本語曲名を入力してください。");
       return;
     }
 
@@ -149,7 +152,8 @@ export default function AdminPage() {
         : "";
 
       const { error } = await supabase.from("tracks").insert({
-        title,
+        title: title.trim(),
+        title_en: titleEn.trim() || title.trim(),
         source,
         category,
         slot_name: slotName,
@@ -168,6 +172,7 @@ export default function AdminPage() {
       }
 
       setTitle("");
+      setTitleEn("");
       setSource("");
       setCategory("Wiiコース");
       setSlotName("");
@@ -208,6 +213,7 @@ export default function AdminPage() {
     setMessage("");
     setEditingTrackId(track.id);
     setEditTitle(track.title ?? "");
+    setEditTitleEn(track.title_en || track.title || "");
     setEditSource(track.source ?? "");
     setEditCategory(track.category ?? "Wiiコース");
     setEditSlotName(track.slot_name ?? "");
@@ -220,6 +226,7 @@ export default function AdminPage() {
   function cancelEdit() {
     setEditingTrackId(null);
     setEditTitle("");
+    setEditTitleEn("");
     setEditSource("");
     setEditCategory("Wiiコース");
     setEditSlotName("");
@@ -237,7 +244,7 @@ export default function AdminPage() {
     }
 
     if (!editTitle.trim()) {
-      setMessage("曲名を入力してください。");
+      setMessage("日本語曲名を入力してください。");
       return;
     }
 
@@ -247,7 +254,8 @@ export default function AdminPage() {
     const { error } = await supabase
       .from("tracks")
       .update({
-        title: editTitle,
+        title: editTitle.trim(),
+        title_en: editTitleEn.trim() || editTitle.trim(),
         source: editSource,
         category: editCategory,
         slot_name: editSlotName,
@@ -383,12 +391,22 @@ export default function AdminPage() {
           <form className="adminForm" onSubmit={handleSubmit}>
             <div className="formGrid">
               <label className="formLabel">
-                曲名
+                日本語曲名
                 <input
                   className="formInput"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   required
+                />
+              </label>
+
+              <label className="formLabel">
+                英語曲名
+                <input
+                  className="formInput"
+                  value={titleEn}
+                  onChange={(event) => setTitleEn(event.target.value)}
+                  placeholder="空欄の場合は日本語曲名と同じ"
                 />
               </label>
 
@@ -536,12 +554,22 @@ export default function AdminPage() {
                   <form className="adminForm" onSubmit={handleEditSubmit}>
                     <div className="formGrid">
                       <label className="formLabel">
-                        曲名
+                        日本語曲名
                         <input
                           className="formInput"
                           value={editTitle}
                           onChange={(event) => setEditTitle(event.target.value)}
                           required
+                        />
+                      </label>
+
+                      <label className="formLabel">
+                        英語曲名
+                        <input
+                          className="formInput"
+                          value={editTitleEn}
+                          onChange={(event) => setEditTitleEn(event.target.value)}
+                          placeholder="空欄の場合は日本語曲名と同じ"
                         />
                       </label>
 
@@ -649,6 +677,7 @@ export default function AdminPage() {
                   <>
                     <div>
                       <h3>{track.title}</h3>
+                      <p>英語名: {track.title_en || track.title}</p>
                       <p>{track.source || "-"}</p>
                       <p>
                         {track.category} / {track.slot_name || "-"} /{" "}

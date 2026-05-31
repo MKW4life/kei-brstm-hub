@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 type Track = {
   id: number;
   title: string;
+  title_en: string;
   source: string;
   category: string;
   slot_name: string;
@@ -138,6 +139,14 @@ export default function Home() {
     setLoading(false);
   }
 
+  function getDisplayTitle(track: Track) {
+    if (language === "en") {
+      return track.title_en || track.title;
+    }
+
+    return track.title;
+  }
+
   const visibleTracks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
@@ -146,6 +155,7 @@ export default function Home() {
       .filter((track) => {
         const searchableText = [
           track.title,
+          track.title_en,
           track.source,
           track.category,
           track.slot_name,
@@ -160,7 +170,9 @@ export default function Home() {
       })
       .sort((a, b) => {
         if (sort === "name") {
-          return a.title.localeCompare(b.title);
+          const titleA = language === "en" ? a.title_en || a.title : a.title;
+          const titleB = language === "en" ? b.title_en || b.title : b.title;
+          return titleA.localeCompare(titleB);
         }
 
         if (sort === "downloads") {
@@ -169,7 +181,7 @@ export default function Home() {
 
         return b.created_at.localeCompare(a.created_at);
       });
-  }, [tracks, query, category, sort]);
+  }, [tracks, query, category, sort, language]);
 
   const categories = [
     { value: "すべて", label: t.all },
@@ -412,9 +424,13 @@ export default function Home() {
                 <article className="trackCard" key={track.id}>
                   <div className="trackInfo">
                     <div className="trackTitleRow">
-                      <h3>{track.title}</h3>
+                      <h3>{getDisplayTitle(track)}</h3>
                       <span className="tag">{track.category}</span>
                     </div>
+
+                    {language === "en" && track.title_en && track.title_en !== track.title && (
+                      <p className="source">{track.title}</p>
+                    )}
 
                     <p className="source">{track.source}</p>
 
