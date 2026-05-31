@@ -626,3 +626,12 @@ a {
     justify-content: flex-start;
   }
 }
+.clickableTag {
+  cursor: pointer;
+  font: inherit;
+}
+
+.clickableTag:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}

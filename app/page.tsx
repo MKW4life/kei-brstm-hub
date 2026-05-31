@@ -12,6 +12,7 @@ type Track = {
   slot_name: string;
   example_ct: string;
   description: string;
+  tags: string;
   brstm_url: string;
   preview_url: string;
   brstm_lap3_url: string;
@@ -24,7 +25,7 @@ const translations = {
   ja: {
     subtitle:
       "Mario Kart Wii / CTGP-R 向けミュージックハックを検索・試聴・ダウンロード",
-    search: "曲名・対応スロット・使用例CTで検索",
+    search: "曲名・タグ・対応スロット・使用例CTで検索",
     all: "すべて",
     wii: "Wiiコース",
     retro: "レトロコース",
@@ -53,7 +54,7 @@ const translations = {
   en: {
     subtitle:
       "Search, preview, and download music hacks for Mario Kart Wii / CTGP-R",
-    search: "Search by title, slot, or example CT",
+    search: "Search by title, tags, slot, or example CT",
     all: "All",
     wii: "Wii Courses",
     retro: "Retro Courses",
@@ -146,9 +147,11 @@ export default function Home() {
         const searchableText = [
           track.title,
           track.source,
+          track.category,
           track.slot_name,
           track.example_ct,
           track.description,
+          track.tags,
         ]
           .join(" ")
           .toLowerCase();
@@ -175,6 +178,16 @@ export default function Home() {
     { value: "バトルコース", label: t.battle },
     { value: "その他BGM", label: t.other },
   ];
+
+  function handleTagClick(tag: string) {
+    setQuery(tag);
+    setCategory("すべて");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
 
   async function handlePreview(track: Track, previewUrl: string, label: string) {
     if (!previewUrl) {
@@ -286,6 +299,33 @@ export default function Home() {
     );
   }
 
+  function renderTags(tags: string) {
+    const tagList = tags
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (tagList.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="trackTags">
+        {tagList.map((tag) => (
+          <button
+            className="tag clickableTag"
+            key={tag}
+            type="button"
+            onClick={() => handleTagClick(tag)}
+            title={`Search: ${tag}`}
+          >
+            #{tag}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <header className="header">
@@ -390,6 +430,8 @@ export default function Home() {
                     {track.description && (
                       <p className="description">{track.description}</p>
                     )}
+
+                    {track.tags && renderTags(track.tags)}
                   </div>
 
                   <div className="trackActions vertical">

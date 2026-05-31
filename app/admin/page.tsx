@@ -13,6 +13,7 @@ type Track = {
   slot_name: string;
   example_ct: string;
   description: string;
+  tags: string;
   brstm_url: string;
   preview_url: string;
   brstm_lap3_url: string;
@@ -42,6 +43,7 @@ export default function AdminPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const [title, setTitle] = useState("");
   const [source, setSource] = useState("");
@@ -49,12 +51,23 @@ export default function AdminPage() {
   const [slotName, setSlotName] = useState("");
   const [exampleCt, setExampleCt] = useState("");
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
   const [isPublished, setIsPublished] = useState(true);
 
   const [brstmFile, setBrstmFile] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [brstmLap3File, setBrstmLap3File] = useState<File | null>(null);
   const [previewLap3File, setPreviewLap3File] = useState<File | null>(null);
+
+  const [editingTrackId, setEditingTrackId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editSource, setEditSource] = useState("");
+  const [editCategory, setEditCategory] = useState("Wiiコース");
+  const [editSlotName, setEditSlotName] = useState("");
+  const [editExampleCt, setEditExampleCt] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [editIsPublished, setEditIsPublished] = useState(true);
 
   useEffect(() => {
     async function checkLogin() {
@@ -142,6 +155,7 @@ export default function AdminPage() {
         slot_name: slotName,
         example_ct: exampleCt,
         description,
+        tags,
         brstm_url: brstmUrl,
         preview_url: previewUrl,
         brstm_lap3_url: brstmLap3Url,
@@ -159,6 +173,7 @@ export default function AdminPage() {
       setSlotName("");
       setExampleCt("");
       setDescription("");
+      setTags("");
       setIsPublished(true);
       setBrstmFile(null);
       setPreviewFile(null);
@@ -187,6 +202,73 @@ export default function AdminPage() {
     }
 
     setSubmitting(false);
+  }
+
+  function startEdit(track: Track) {
+    setMessage("");
+    setEditingTrackId(track.id);
+    setEditTitle(track.title ?? "");
+    setEditSource(track.source ?? "");
+    setEditCategory(track.category ?? "Wiiコース");
+    setEditSlotName(track.slot_name ?? "");
+    setEditExampleCt(track.example_ct ?? "");
+    setEditDescription(track.description ?? "");
+    setEditTags(track.tags ?? "");
+    setEditIsPublished(track.is_published);
+  }
+
+  function cancelEdit() {
+    setEditingTrackId(null);
+    setEditTitle("");
+    setEditSource("");
+    setEditCategory("Wiiコース");
+    setEditSlotName("");
+    setEditExampleCt("");
+    setEditDescription("");
+    setEditTags("");
+    setEditIsPublished(true);
+  }
+
+  async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (editingTrackId === null) {
+      return;
+    }
+
+    if (!editTitle.trim()) {
+      setMessage("曲名を入力してください。");
+      return;
+    }
+
+    setEditing(true);
+    setMessage("");
+
+    const { error } = await supabase
+      .from("tracks")
+      .update({
+        title: editTitle,
+        source: editSource,
+        category: editCategory,
+        slot_name: editSlotName,
+        example_ct: editExampleCt,
+        description: editDescription,
+        tags: editTags,
+        is_published: editIsPublished,
+      })
+      .eq("id", editingTrackId);
+
+    if (error) {
+      console.error(error);
+      setMessage("編集内容の保存に失敗しました。");
+      setEditing(false);
+      return;
+    }
+
+    setMessage("編集内容を保存しました。");
+    cancelEdit();
+    await loadTracks();
+    setEditing(false);
   }
 
   async function handleTogglePublish(track: Track) {
@@ -239,6 +321,27 @@ export default function AdminPage() {
 
   function handlePreviewLap3Change(event: ChangeEvent<HTMLInputElement>) {
     setPreviewLap3File(event.target.files?.[0] ?? null);
+  }
+
+  function renderTags(trackTags: string) {
+    const tagList = trackTags
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (tagList.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="trackTags">
+        {tagList.map((tag) => (
+          <span className="tag" key={tag}>
+            #{tag}
+          </span>
+        ))}
+      </div>
+    );
   }
 
   if (checking) {
@@ -354,6 +457,16 @@ export default function AdminPage() {
               />
             </label>
 
+            <label className="formLabel">
+              タグ
+              <input
+                className="formInput"
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="例: Wii, Rainbow Road, 激しい, ラストラップ"
+              />
+            </label>
+
             <div className="formGrid">
               <label className="formLabel">
                 通常用 BRSTM
@@ -419,37 +532,166 @@ export default function AdminPage() {
           <div className="adminTrackList">
             {tracks.map((track) => (
               <article className="adminTrackCard" key={track.id}>
-                <div>
-                  <h3>{track.title}</h3>
-                  <p>{track.source || "-"}</p>
-                  <p>
-                    {track.category} / {track.slot_name || "-"} /{" "}
-                    {track.example_ct || "-"}
-                  </p>
-                  <p>
-                    通常: {track.brstm_url ? "BRSTMあり" : "BRSTMなし"} /{" "}
-                    Lap 3: {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"}
-                  </p>
-                  <p>{track.is_published ? "公開中" : "非公開"}</p>
-                </div>
+                {editingTrackId === track.id ? (
+                  <form className="adminForm" onSubmit={handleEditSubmit}>
+                    <div className="formGrid">
+                      <label className="formLabel">
+                        曲名
+                        <input
+                          className="formInput"
+                          value={editTitle}
+                          onChange={(event) => setEditTitle(event.target.value)}
+                          required
+                        />
+                      </label>
 
-                <div className="adminActions">
-                  <button
-                    className="secondaryButton"
-                    type="button"
-                    onClick={() => handleTogglePublish(track)}
-                  >
-                    {track.is_published ? "非公開にする" : "公開する"}
-                  </button>
+                      <label className="formLabel">
+                        出典・作者
+                        <input
+                          className="formInput"
+                          value={editSource}
+                          onChange={(event) => setEditSource(event.target.value)}
+                        />
+                      </label>
 
-                  <button
-                    className="dangerButton"
-                    type="button"
-                    onClick={() => handleDelete(track)}
-                  >
-                    削除
-                  </button>
-                </div>
+                      <label className="formLabel">
+                        カテゴリ
+                        <select
+                          className="formInput"
+                          value={editCategory}
+                          onChange={(event) =>
+                            setEditCategory(event.target.value)
+                          }
+                        >
+                          {categories.map((item) => (
+                            <option key={item} value={item}>
+                              {item}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="formLabel">
+                        対応スロット
+                        <input
+                          className="formInput"
+                          value={editSlotName}
+                          onChange={(event) =>
+                            setEditSlotName(event.target.value)
+                          }
+                        />
+                      </label>
+
+                      <label className="formLabel">
+                        使用例CT
+                        <input
+                          className="formInput"
+                          value={editExampleCt}
+                          onChange={(event) =>
+                            setEditExampleCt(event.target.value)
+                          }
+                        />
+                      </label>
+
+                      <label className="formLabel checkboxLabel">
+                        <input
+                          type="checkbox"
+                          checked={editIsPublished}
+                          onChange={(event) =>
+                            setEditIsPublished(event.target.checked)
+                          }
+                        />
+                        公開する
+                      </label>
+                    </div>
+
+                    <label className="formLabel">
+                      説明
+                      <textarea
+                        className="formTextarea"
+                        value={editDescription}
+                        onChange={(event) =>
+                          setEditDescription(event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="formLabel">
+                      タグ
+                      <input
+                        className="formInput"
+                        value={editTags}
+                        onChange={(event) => setEditTags(event.target.value)}
+                        placeholder="例: Wii, Rainbow Road, 激しい, ラストラップ"
+                      />
+                    </label>
+
+                    <div className="adminActions">
+                      <button
+                        className="primaryButton"
+                        type="submit"
+                        disabled={editing}
+                      >
+                        {editing ? "保存中..." : "保存する"}
+                      </button>
+
+                      <button
+                        className="secondaryButton"
+                        type="button"
+                        onClick={cancelEdit}
+                        disabled={editing}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div>
+                      <h3>{track.title}</h3>
+                      <p>{track.source || "-"}</p>
+                      <p>
+                        {track.category} / {track.slot_name || "-"} /{" "}
+                        {track.example_ct || "-"}
+                      </p>
+
+                      {track.tags && renderTags(track.tags)}
+
+                      <p>
+                        通常: {track.brstm_url ? "BRSTMあり" : "BRSTMなし"} /{" "}
+                        Lap 3:{" "}
+                        {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"}
+                      </p>
+                      <p>{track.is_published ? "公開中" : "非公開"}</p>
+                    </div>
+
+                    <div className="adminActions">
+                      <button
+                        className="secondaryButton"
+                        type="button"
+                        onClick={() => startEdit(track)}
+                      >
+                        編集
+                      </button>
+
+                      <button
+                        className="secondaryButton"
+                        type="button"
+                        onClick={() => handleTogglePublish(track)}
+                      >
+                        {track.is_published ? "非公開にする" : "公開する"}
+                      </button>
+
+                      <button
+                        className="dangerButton"
+                        type="button"
+                        onClick={() => handleDelete(track)}
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </>
+                )}
               </article>
             ))}
 
