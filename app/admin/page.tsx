@@ -484,12 +484,12 @@ export default function AdminPage() {
               </label>
 
               <label className="formLabel">
-                通常用プレビュー音源
+                通常用プレビューMP3
                 <input
                   id="previewFile"
                   className="formInput"
                   type="file"
-                  accept=".wav,.mp3,.ogg"
+                  accept=".mp3"
                   onChange={handlePreviewChange}
                 />
               </label>
@@ -506,12 +506,12 @@ export default function AdminPage() {
               </label>
 
               <label className="formLabel">
-                Lap 3用プレビュー音源
+                Lap 3用プレビューMP3
                 <input
                   id="previewLap3File"
                   className="formInput"
                   type="file"
-                  accept=".wav,.mp3,.ogg"
+                  accept=".mp3"
                   onChange={handlePreviewLap3Change}
                 />
               </label>
@@ -651,8 +651,13 @@ export default function AdminPage() {
 
                       <p>
                         通常: {track.brstm_url ? "BRSTMあり" : "BRSTMなし"} /{" "}
+                        通常プレビュー: {track.preview_url ? "MP3あり" : "MP3なし"}
+                      </p>
+                      <p>
                         Lap 3:{" "}
-                        {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"}
+                        {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"} /{" "}
+                        Lap 3プレビュー:{" "}
+                        {track.preview_lap3_url ? "MP3あり" : "MP3なし"}
                       </p>
                       <p>{track.is_published ? "公開中" : "非公開"}</p>
                     </div>
