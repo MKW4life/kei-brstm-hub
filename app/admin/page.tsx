@@ -9,9 +9,7 @@ type Track = {
   id: number;
   title: string;
   title_en: string;
-  source: string;
   category: string;
-  slot_name: string;
   example_ct: string;
   description: string;
   tags: string;
@@ -24,7 +22,7 @@ type Track = {
   created_at: string;
 };
 
-const categories = ["Wiiコース", "レトロコース", "バトルコース", "その他BGM"];
+const categories = ["コースBGM", "その他BGM"];
 
 function safeFileName(fileName: string) {
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
@@ -48,9 +46,7 @@ export default function AdminPage() {
 
   const [title, setTitle] = useState("");
   const [titleEn, setTitleEn] = useState("");
-  const [source, setSource] = useState("");
-  const [category, setCategory] = useState("Wiiコース");
-  const [slotName, setSlotName] = useState("");
+  const [category, setCategory] = useState("コースBGM");
   const [exampleCt, setExampleCt] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
@@ -64,9 +60,7 @@ export default function AdminPage() {
   const [editingTrackId, setEditingTrackId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editTitleEn, setEditTitleEn] = useState("");
-  const [editSource, setEditSource] = useState("");
-  const [editCategory, setEditCategory] = useState("Wiiコース");
-  const [editSlotName, setEditSlotName] = useState("");
+  const [editCategory, setEditCategory] = useState("コースBGM");
   const [editExampleCt, setEditExampleCt] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
@@ -91,7 +85,24 @@ export default function AdminPage() {
   async function loadTracks() {
     const { data, error } = await supabase
       .from("tracks")
-      .select("*")
+      .select(
+        `
+        id,
+        title,
+        title_en,
+        category,
+        example_ct,
+        description,
+        tags,
+        brstm_url,
+        preview_url,
+        brstm_lap3_url,
+        preview_lap3_url,
+        download_count,
+        is_published,
+        created_at
+      `
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -154,9 +165,9 @@ export default function AdminPage() {
       const { error } = await supabase.from("tracks").insert({
         title: title.trim(),
         title_en: titleEn.trim() || title.trim(),
-        source,
+        source: "",
         category,
-        slot_name: slotName,
+        slot_name: "",
         example_ct: exampleCt,
         description,
         tags,
@@ -173,9 +184,7 @@ export default function AdminPage() {
 
       setTitle("");
       setTitleEn("");
-      setSource("");
-      setCategory("Wiiコース");
-      setSlotName("");
+      setCategory("コースBGM");
       setExampleCt("");
       setDescription("");
       setTags("");
@@ -214,9 +223,7 @@ export default function AdminPage() {
     setEditingTrackId(track.id);
     setEditTitle(track.title ?? "");
     setEditTitleEn(track.title_en || track.title || "");
-    setEditSource(track.source ?? "");
-    setEditCategory(track.category ?? "Wiiコース");
-    setEditSlotName(track.slot_name ?? "");
+    setEditCategory(track.category ?? "コースBGM");
     setEditExampleCt(track.example_ct ?? "");
     setEditDescription(track.description ?? "");
     setEditTags(track.tags ?? "");
@@ -227,9 +234,7 @@ export default function AdminPage() {
     setEditingTrackId(null);
     setEditTitle("");
     setEditTitleEn("");
-    setEditSource("");
-    setEditCategory("Wiiコース");
-    setEditSlotName("");
+    setEditCategory("コースBGM");
     setEditExampleCt("");
     setEditDescription("");
     setEditTags("");
@@ -256,9 +261,9 @@ export default function AdminPage() {
       .update({
         title: editTitle.trim(),
         title_en: editTitleEn.trim() || editTitle.trim(),
-        source: editSource,
+        source: "",
         category: editCategory,
-        slot_name: editSlotName,
+        slot_name: "",
         example_ct: editExampleCt,
         description: editDescription,
         tags: editTags,
@@ -411,16 +416,6 @@ export default function AdminPage() {
               </label>
 
               <label className="formLabel">
-                出典・作者
-                <input
-                  className="formInput"
-                  value={source}
-                  onChange={(event) => setSource(event.target.value)}
-                  placeholder="Original / Kei"
-                />
-              </label>
-
-              <label className="formLabel">
                 カテゴリ
                 <select
                   className="formInput"
@@ -436,22 +431,12 @@ export default function AdminPage() {
               </label>
 
               <label className="formLabel">
-                対応スロット
-                <input
-                  className="formInput"
-                  value={slotName}
-                  onChange={(event) => setSlotName(event.target.value)}
-                  placeholder="ココナッツモール"
-                />
-              </label>
-
-              <label className="formLabel">
-                使用例CT
+                使用例
                 <input
                   className="formInput"
                   value={exampleCt}
                   onChange={(event) => setExampleCt(event.target.value)}
-                  placeholder="Aquania"
+                  placeholder="例: Rainbow Road / Aquania"
                 />
               </label>
 
@@ -574,15 +559,6 @@ export default function AdminPage() {
                       </label>
 
                       <label className="formLabel">
-                        出典・作者
-                        <input
-                          className="formInput"
-                          value={editSource}
-                          onChange={(event) => setEditSource(event.target.value)}
-                        />
-                      </label>
-
-                      <label className="formLabel">
                         カテゴリ
                         <select
                           className="formInput"
@@ -600,18 +576,7 @@ export default function AdminPage() {
                       </label>
 
                       <label className="formLabel">
-                        対応スロット
-                        <input
-                          className="formInput"
-                          value={editSlotName}
-                          onChange={(event) =>
-                            setEditSlotName(event.target.value)
-                          }
-                        />
-                      </label>
-
-                      <label className="formLabel">
-                        使用例CT
+                        使用例
                         <input
                           className="formInput"
                           value={editExampleCt}
@@ -678,10 +643,8 @@ export default function AdminPage() {
                     <div>
                       <h3>{track.title}</h3>
                       <p>英語名: {track.title_en || track.title}</p>
-                      <p>{track.source || "-"}</p>
                       <p>
-                        {track.category} / {track.slot_name || "-"} /{" "}
-                        {track.example_ct || "-"}
+                        {track.category} / 使用例: {track.example_ct || "-"}
                       </p>
 
                       {track.tags && renderTags(track.tags)}

@@ -8,9 +8,7 @@ type Track = {
   id: number;
   title: string;
   title_en: string;
-  source: string;
   category: string;
-  slot_name: string;
   example_ct: string;
   description: string;
   tags: string;
@@ -26,18 +24,15 @@ const translations = {
   ja: {
     subtitle:
       "Mario Kart Wii / CTGP-R 向けミュージックハックを検索・試聴・ダウンロード",
-    search: "曲名・タグ・対応スロット・使用例CTで検索",
+    search: "曲名・タグ・使用例で検索",
     all: "すべて",
-    wii: "Wiiコース",
-    retro: "レトロコース",
-    battle: "バトルコース",
-    other: "その他BGM",
+    courseBgm: "コースBGM",
+    otherBgm: "その他BGM",
     newest: "新着順",
     name: "曲名順",
     downloads: "ダウンロード数順",
     published: "公開中のBRSTM",
-    slot: "対応スロット",
-    example: "使用例CT",
+    example: "使用例",
     normal: "通常",
     lap3: "Lap 3",
     preview: "試聴",
@@ -55,18 +50,15 @@ const translations = {
   en: {
     subtitle:
       "Search, preview, and download music hacks for Mario Kart Wii / CTGP-R",
-    search: "Search by title, tags, slot, or example CT",
+    search: "Search by title, tags, or usage example",
     all: "All",
-    wii: "Wii Courses",
-    retro: "Retro Courses",
-    battle: "Battle Courses",
-    other: "Other Music",
+    courseBgm: "Course BGM",
+    otherBgm: "Other BGM",
     newest: "Newest",
     name: "Title A-Z",
     downloads: "Most Downloaded",
     published: "Available BRSTMs",
-    slot: "Slot",
-    example: "Example CT",
+    example: "Usage example",
     normal: "Normal",
     lap3: "Lap 3",
     preview: "Preview",
@@ -124,7 +116,23 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("tracks")
-      .select("*")
+      .select(
+        `
+        id,
+        title,
+        title_en,
+        category,
+        example_ct,
+        description,
+        tags,
+        brstm_url,
+        preview_url,
+        brstm_lap3_url,
+        preview_lap3_url,
+        download_count,
+        created_at
+      `
+      )
       .eq("is_published", true)
       .order("created_at", { ascending: false });
 
@@ -156,9 +164,7 @@ export default function Home() {
         const searchableText = [
           track.title,
           track.title_en,
-          track.source,
           track.category,
-          track.slot_name,
           track.example_ct,
           track.description,
           track.tags,
@@ -185,10 +191,8 @@ export default function Home() {
 
   const categories = [
     { value: "すべて", label: t.all },
-    { value: "Wiiコース", label: t.wii },
-    { value: "レトロコース", label: t.retro },
-    { value: "バトルコース", label: t.battle },
-    { value: "その他BGM", label: t.other },
+    { value: "コースBGM", label: t.courseBgm },
+    { value: "その他BGM", label: t.otherBgm },
   ];
 
   function handleTagClick(tag: string) {
@@ -428,16 +432,13 @@ export default function Home() {
                       <span className="tag">{track.category}</span>
                     </div>
 
-                    {language === "en" && track.title_en && track.title_en !== track.title && (
-                      <p className="source">{track.title}</p>
-                    )}
-
-                    <p className="source">{track.source}</p>
+                    {language === "en" &&
+                      track.title_en &&
+                      track.title_en !== track.title && (
+                        <p className="source">{track.title}</p>
+                      )}
 
                     <div className="trackMeta">
-                      <span>
-                        {t.slot}: {track.slot_name || "-"}
-                      </span>
                       <span>
                         {t.example}: {track.example_ct || "-"}
                       </span>
