@@ -31,6 +31,8 @@ const translations = {
     newest: "新着順",
     name: "曲名順",
     downloads: "ダウンロード数順",
+    random: "ランダム選曲",
+    clearRandom: "ランダム解除",
     published: "公開中のBRSTM",
     example: "使用例",
     normal: "通常",
@@ -57,6 +59,8 @@ const translations = {
     newest: "Newest",
     name: "Title A-Z",
     downloads: "Most Downloaded",
+    random: "Random Pick",
+    clearRandom: "Clear Random",
     published: "Available BRSTMs",
     example: "Usage example",
     normal: "Normal",
@@ -88,6 +92,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("すべて");
   const [sort, setSort] = useState("newest");
+  const [randomTrackId, setRandomTrackId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -155,7 +160,7 @@ export default function Home() {
     return track.title;
   }
 
-  const visibleTracks = useMemo(() => {
+  const filteredTracks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
     return [...tracks]
@@ -189,6 +194,14 @@ export default function Home() {
       });
   }, [tracks, query, category, sort, language]);
 
+  const visibleTracks = useMemo(() => {
+    if (randomTrackId === null) {
+      return filteredTracks;
+    }
+
+    return filteredTracks.filter((track) => track.id === randomTrackId);
+  }, [filteredTracks, randomTrackId]);
+
   const categories = [
     { value: "すべて", label: t.all },
     { value: "コースBGM", label: t.courseBgm },
@@ -198,11 +211,32 @@ export default function Home() {
   function handleTagClick(tag: string) {
     setQuery(tag);
     setCategory("すべて");
+    setRandomTrackId(null);
 
     window.scrollTo({
       top: 0,
       behavior: "smooth",
     });
+  }
+
+  function handleRandomPick() {
+    if (filteredTracks.length === 0) {
+      return;
+    }
+
+    const randomIndex = Math.floor(Math.random() * filteredTracks.length);
+    const randomTrack = filteredTracks[randomIndex];
+
+    setRandomTrackId(randomTrack.id);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function clearRandomPick() {
+    setRandomTrackId(null);
   }
 
   async function handlePreview(track: Track, previewUrl: string, label: string) {
@@ -381,19 +415,44 @@ export default function Home() {
               type="text"
               placeholder={t.search}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setRandomTrackId(null);
+              }}
             />
 
             <select
               className="sort"
               value={sort}
-              onChange={(event) => setSort(event.target.value)}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setRandomTrackId(null);
+              }}
               aria-label={t.newest}
             >
               <option value="newest">{t.newest}</option>
               <option value="name">{t.name}</option>
               <option value="downloads">{t.downloads}</option>
             </select>
+
+            {randomTrackId === null ? (
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={handleRandomPick}
+                disabled={filteredTracks.length === 0}
+              >
+                {t.random}
+              </button>
+            ) : (
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={clearRandomPick}
+              >
+                {t.clearRandom}
+              </button>
+            )}
           </div>
 
           <div className="categories">
@@ -404,7 +463,10 @@ export default function Home() {
                 className={
                   category === item.value ? "category active" : "category"
                 }
-                onClick={() => setCategory(item.value)}
+                onClick={() => {
+                  setCategory(item.value);
+                  setRandomTrackId(null);
+                }}
               >
                 {item.label}
               </button>
