@@ -54,6 +54,28 @@ function getLoopLabel(loopType: string) {
   return "Perfect Loop";
 }
 
+function getStoragePathFromPublicUrl(bucket: string, publicUrl: string) {
+  if (!publicUrl) {
+    return null;
+  }
+
+  try {
+    const marker = `/storage/v1/object/public/${bucket}/`;
+    const markerIndex = publicUrl.indexOf(marker);
+
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    const pathWithQuery = publicUrl.slice(markerIndex + marker.length);
+    const path = pathWithQuery.split("?")[0];
+
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -167,6 +189,29 @@ export default function AdminPage() {
     const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
 
     return data.publicUrl;
+  }
+
+  async function removeStorageFile(bucket: string, publicUrl: string) {
+    const filePath = getStoragePathFromPublicUrl(bucket, publicUrl);
+
+    if (!filePath) {
+      return;
+    }
+
+    const { error } = await supabase.storage.from(bucket).remove([filePath]);
+
+    if (error) {
+      console.warn(`Storage file delete failed: ${bucket}/${filePath}`, error);
+    }
+  }
+
+  async function removeAllTrackFiles(track: Track) {
+    await Promise.all([
+      removeStorageFile("brstm-files", track.brstm_url),
+      removeStorageFile("previews", track.preview_url),
+      removeStorageFile("brstm-files", track.brstm_lap3_url),
+      removeStorageFile("previews", track.preview_lap3_url),
+    ]);
   }
 
   function clearFileInputs(inputIds: string[]) {
@@ -375,6 +420,8 @@ export default function AdminPage() {
       return;
     }
 
+    const currentTrack = tracks.find((track) => track.id === editingTrackId);
+
     setEditing(true);
     setMessage("");
 
@@ -407,6 +454,17 @@ export default function AdminPage() {
         is_published: editIsPublished,
       };
 
+      const shouldDeleteOldBrstm = Boolean(editBrstmFile && currentTrack?.brstm_url);
+      const shouldDeleteOldPreview = Boolean(
+        editPreviewFile && currentTrack?.preview_url
+      );
+      const shouldDeleteOldLap3Brstm = Boolean(
+        editBrstmLap3File && currentTrack?.brstm_lap3_url
+      );
+      const shouldDeleteOldLap3Preview = Boolean(
+        editPreviewLap3File && currentTrack?.preview_lap3_url
+      );
+
       if (editBrstmFile) {
         updateData.brstm_url = await uploadFile("brstm-files", editBrstmFile);
       }
@@ -438,7 +496,24 @@ export default function AdminPage() {
         throw error;
       }
 
-      setMessage("編集内容を保存しました。");
+      if (currentTrack) {
+        await Promise.all([
+          shouldDeleteOldBrstm
+            ? removeStorageFile("brstm-files", currentTrack.brstm_url)
+            : Promise.resolve(),
+          shouldDeleteOldPreview
+            ? removeStorageFile("previews", currentTrack.preview_url)
+            : Promise.resolve(),
+          shouldDeleteOldLap3Brstm
+            ? removeStorageFile("brstm-files", currentTrack.brstm_lap3_url)
+            : Promise.resolve(),
+          shouldDeleteOldLap3Preview
+            ? removeStorageFile("previews", currentTrack.preview_lap3_url)
+            : Promise.resolve(),
+        ]);
+      }
+
+      setMessage("編集内容を保存しました。古いファイルも削除しました。");
       cancelEdit();
       await loadTracks();
     } catch (error) {
@@ -465,7 +540,9 @@ export default function AdminPage() {
   }
 
   async function handleDelete(track: Track) {
-    const ok = window.confirm(`${track.title} を削除しますか？`);
+    const ok = window.confirm(
+      `${track.title} を削除しますか？\n関連するStorageファイルも削除されます。`
+    );
     if (!ok) return;
 
     const { error } = await supabase.from("tracks").delete().eq("id", track.id);
@@ -476,7 +553,9 @@ export default function AdminPage() {
       return;
     }
 
-    setMessage("削除しました。");
+    await removeAllTrackFiles(track);
+
+    setMessage("曲と関連ファイルを削除しました。");
     await loadTracks();
   }
 
@@ -875,7 +954,7 @@ export default function AdminPage() {
                     </div>
 
                     <p className="formMessage">
-                      ファイルを選択した項目だけ新しいURLに差し替えます。
+                      ファイルを選択した項目だけ新しいURLに差し替え、古いStorageファイルを削除します。
                     </p>
 
                     <div className="adminActions">
