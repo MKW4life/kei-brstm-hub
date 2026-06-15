@@ -12,6 +12,7 @@ type Track = {
   example_ct: string;
   description: string;
   tags: string;
+  loop_type: string;
   brstm_url: string;
   preview_url: string;
   brstm_lap3_url: string;
@@ -87,6 +88,18 @@ function createDownloadUrl(url: string) {
   return url.includes("?") ? `${url}&download=` : `${url}?download=`;
 }
 
+function getLoopLabel(loopType: string) {
+  if (loopType === "bad_loop") {
+    return "Bad Loop";
+  }
+
+  if (loopType === "no_loop") {
+    return "No Loop";
+  }
+
+  return "Perfect Loop";
+}
+
 export default function Home() {
   const [language, setLanguage] = useState<"ja" | "en">("ja");
   const [query, setQuery] = useState("");
@@ -130,6 +143,7 @@ export default function Home() {
         example_ct,
         description,
         tags,
+        loop_type,
         brstm_url,
         preview_url,
         brstm_lap3_url,
@@ -173,6 +187,7 @@ export default function Home() {
           track.example_ct,
           track.description,
           track.tags,
+          getLoopLabel(track.loop_type),
         ]
           .join(" ")
           .toLowerCase();
@@ -492,6 +507,7 @@ export default function Home() {
                     <div className="trackTitleRow">
                       <h3>{getDisplayTitle(track)}</h3>
                       <span className="tag">{track.category}</span>
+                      <span className="tag">{getLoopLabel(track.loop_type)}</span>
                     </div>
 
                     {language === "en" &&
