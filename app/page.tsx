@@ -493,14 +493,51 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="main">
-        <section className="hero">
+      <main
+        className="main"
+        style={
+          isPackCreatorView
+            ? {
+                width: "100%",
+                maxWidth: "none",
+                paddingLeft: "24px",
+                paddingRight: "24px",
+                boxSizing: "border-box",
+              }
+            : undefined
+        }
+      >
+        <section
+          className="hero"
+          style={
+            isPackCreatorView
+              ? {
+                  width: "100%",
+                  maxWidth: "940px",
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                }
+              : undefined
+          }
+        >
           <p className="label">CTGP-R MUSIC LIBRARY</p>
           <h1>Kei BRSTM Hub</h1>
           <p className="subtitle">{t.subtitle}</p>
         </section>
 
-        <section className="controls">
+        <section
+          className="controls"
+          style={
+            isPackCreatorView
+              ? {
+                  width: "100%",
+                  maxWidth: "940px",
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                }
+              : undefined
+          }
+        >
           {!isPackCreatorView && (
             <div className="controlTop">
               <input
