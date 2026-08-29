@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -58,6 +58,19 @@ type BulkGroup = {
   status: "ready" | "uploading" | "done" | "error";
 };
 
+type DuplicateMatch = {
+  id: number;
+  title: string;
+  titleEn: string;
+  score: number;
+};
+
+type DuplicateReviewItem = {
+  groupKey: string;
+  incomingTitle: string;
+  matches: DuplicateMatch[];
+};
+
 const categories = ["コースBGM", "その他BGM"];
 const loopTypes = [
   { value: "loop", label: "Loop" },
@@ -83,6 +96,64 @@ function getLoopValue(loopType: string) {
 
 function normalizeLoopForSave(loopType: string) {
   return loopType === "loop" || loopType === "perfect_loop" ? "loop" : "no";
+}
+
+
+function normalizeTitleForSimilarity(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/(?:\blap\s*3\b|\bfinal\s*lap\b|\bfinal\b)/gi, " ")
+    .replace(/[\s\-_–—:：!！?？'"“”‘’()（）\[\]【】{}・,.，。/\\]+/g, "")
+    .trim();
+}
+
+function levenshteinDistance(a: string, b: string) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = previous[0];
+    previous[0] = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const oldAbove = previous[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+      previous[j] = Math.min(
+        previous[j] + 1,
+        previous[j - 1] + 1,
+        diagonal + cost
+      );
+
+      diagonal = oldAbove;
+    }
+  }
+
+  return previous[b.length];
+}
+
+function titleSimilarity(a: string, b: string) {
+  const left = normalizeTitleForSimilarity(a);
+  const right = normalizeTitleForSimilarity(b);
+
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+
+  const maxLength = Math.max(left.length, right.length);
+  const editScore = 1 - levenshteinDistance(left, right) / maxLength;
+
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length > right.length ? left : right;
+  const containmentScore =
+    shorter.length >= 7 && longer.includes(shorter)
+      ? shorter.length / longer.length
+      : 0;
+
+  return Math.max(editScore, containmentScore);
 }
 
 function stripExtension(fileName: string) {
@@ -316,6 +387,10 @@ export default function AdminPage() {
   const [packPublished, setPackPublished] = useState(true);
   const [packSubmitting, setPackSubmitting] = useState(false);
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const [adminPlayingKey, setAdminPlayingKey] = useState<string | null>(null);
+  const adminAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [duplicateReview, setDuplicateReview] = useState<DuplicateReviewItem[]>([]);
+  const [showDuplicateReview, setShowDuplicateReview] = useState(false);
 
   const tagSuggestions = useMemo(() => {
     const allTags = [
@@ -362,6 +437,77 @@ export default function AdminPage() {
 
     checkLogin();
   }, [router]);
+
+  useEffect(() => {
+    return () => {
+      if (adminAudioRef.current) {
+        adminAudioRef.current.pause();
+        adminAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  async function handleAdminPreview(
+    track: Track,
+    previewUrl: string,
+    variant: "normal" | "lap3"
+  ) {
+    if (!previewUrl) {
+      setMessage(
+        variant === "normal"
+          ? "通常プレビューMP3が登録されていません。"
+          : "Lap 3プレビューMP3が登録されていません。"
+      );
+      return;
+    }
+
+    const key = `${track.id}-${variant}`;
+
+    if (adminPlayingKey === key && adminAudioRef.current) {
+      adminAudioRef.current.pause();
+      adminAudioRef.current.currentTime = 0;
+      adminAudioRef.current = null;
+      setAdminPlayingKey(null);
+      return;
+    }
+
+    if (adminAudioRef.current) {
+      adminAudioRef.current.pause();
+      adminAudioRef.current.currentTime = 0;
+    }
+
+    const audio = new Audio(previewUrl);
+    const savedVolume = Number(
+      window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5"
+    );
+
+    audio.volume = Number.isFinite(savedVolume)
+      ? Math.min(1, Math.max(0, savedVolume))
+      : 0.5;
+
+    audio.addEventListener("ended", () => {
+      adminAudioRef.current = null;
+      setAdminPlayingKey(null);
+    });
+
+    audio.addEventListener("error", () => {
+      adminAudioRef.current = null;
+      setAdminPlayingKey(null);
+      setMessage("プレビューを再生できませんでした。");
+    });
+
+    adminAudioRef.current = audio;
+    setAdminPlayingKey(key);
+
+    try {
+      await audio.play();
+    } catch (error) {
+      console.error(error);
+      adminAudioRef.current = null;
+      setAdminPlayingKey(null);
+      setMessage("プレビューを再生できませんでした。");
+    }
+  }
 
   async function loadTracks() {
     const { data, error } = await supabase
@@ -708,9 +854,56 @@ export default function AdminPage() {
     }
   }
 
-  async function handleBulkUpload() {
-    if (bulkUploading) return;
+  function findPublishedDuplicateCandidates(groups: BulkGroup[]) {
+    const publishedTracks = tracks.filter((track) => track.is_published);
+    const reviewItems: DuplicateReviewItem[] = [];
 
+    for (const group of groups) {
+      const incomingNames = [group.title, group.titleEn]
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      const matches = publishedTracks
+        .map((track) => {
+          const existingNames = [track.title, track.title_en]
+            .map((value) => (value || "").trim())
+            .filter(Boolean);
+
+          let bestScore = 0;
+
+          for (const incomingName of incomingNames) {
+            for (const existingName of existingNames) {
+              bestScore = Math.max(
+                bestScore,
+                titleSimilarity(incomingName, existingName)
+              );
+            }
+          }
+
+          return {
+            id: track.id,
+            title: track.title,
+            titleEn: track.title_en || track.title,
+            score: bestScore,
+          };
+        })
+        .filter((match) => match.score >= 0.82)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+
+      if (matches.length > 0) {
+        reviewItems.push({
+          groupKey: group.key,
+          incomingTitle: group.title,
+          matches,
+        });
+      }
+    }
+
+    return reviewItems;
+  }
+
+  async function executeBulkUpload() {
     const validGroups = bulkGroups.filter((group) =>
       group.files.some((item) => item.role === "normalBrstm")
     );
@@ -787,6 +980,34 @@ export default function AdminPage() {
       `一括登録完了: ${successCount}曲 / エラー: ${errorCount}曲。`
     );
     await loadTracks();
+  }
+
+  async function handleBulkUpload() {
+    if (bulkUploading) return;
+
+    const validGroups = bulkGroups.filter((group) =>
+      group.files.some((item) => item.role === "normalBrstm")
+    );
+
+    if (validGroups.length === 0) {
+      setMessage("通常用BRSTMがある曲がありません。");
+      return;
+    }
+
+    const duplicates = findPublishedDuplicateCandidates(validGroups);
+
+    if (duplicates.length > 0) {
+      setDuplicateReview(duplicates);
+      setShowDuplicateReview(true);
+      return;
+    }
+
+    await executeBulkUpload();
+  }
+
+  async function handleConfirmDuplicateUpload() {
+    setShowDuplicateReview(false);
+    await executeBulkUpload();
   }
 
   async function handlePackSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1080,70 +1301,6 @@ export default function AdminPage() {
       </header>
 
       <main className="main">
-        <section className="adminPanel wide">
-          <p className="label">TAG MANAGEMENT</p>
-          <h1 className="adminTitle">タグ管理</h1>
-
-          <p className="formMessage">
-            ここでタグ名を変更すると、そのタグを使っているすべての曲とMusic Packに反映されます。
-            削除すると、すべての登録からそのタグだけを取り除きます。
-          </p>
-
-          {tagSuggestions.length === 0 ? (
-            <div className="empty">現在登録されているタグはありません。</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gap: "8px",
-              }}
-            >
-              {tagSuggestions.map((tag) => (
-                <div
-                  key={tag}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(220px, 1fr) auto auto",
-                    gap: "8px",
-                    alignItems: "center",
-                    padding: "10px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: "12px",
-                    background: "rgba(255,255,255,0.02)",
-                  }}
-                >
-                  <input
-                    className="formInput"
-                    value={tagDrafts[tag] ?? tag}
-                    onChange={(event) =>
-                      setTagDrafts((current) => ({
-                        ...current,
-                        [tag]: event.target.value,
-                      }))
-                    }
-                  />
-
-                  <button
-                    className="secondaryButton"
-                    type="button"
-                    onClick={() => handleRenameTag(tag)}
-                  >
-                    名前変更
-                  </button>
-
-                  <button
-                    className="dangerButton"
-                    type="button"
-                    onClick={() => handleDeleteTag(tag)}
-                  >
-                    削除
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
         <section className="adminPanel wide">
           <p className="label">ZIP MUSIC PACK</p>
           <h1 className="adminTitle">ZIPパックを追加</h1>
@@ -1657,6 +1814,45 @@ export default function AdminPage() {
                         {track.preview_lap3_url ? "MP3あり" : "MP3なし"}
                       </p>
                       <p>{track.is_published ? "公開中" : "非公開"}</p>
+
+                      <div
+                        className="adminActions"
+                        style={{ marginTop: "10px" }}
+                      >
+                        <button
+                          className="secondaryButton"
+                          type="button"
+                          disabled={!track.preview_url}
+                          onClick={() =>
+                            handleAdminPreview(
+                              track,
+                              track.preview_url,
+                              "normal"
+                            )
+                          }
+                        >
+                          {adminPlayingKey === `${track.id}-normal`
+                            ? "■ 通常を停止"
+                            : "▶ 通常を試聴"}
+                        </button>
+
+                        <button
+                          className="secondaryButton"
+                          type="button"
+                          disabled={!track.preview_lap3_url}
+                          onClick={() =>
+                            handleAdminPreview(
+                              track,
+                              track.preview_lap3_url,
+                              "lap3"
+                            )
+                          }
+                        >
+                          {adminPlayingKey === `${track.id}-lap3`
+                            ? "■ Lap 3を停止"
+                            : "▶ Lap 3を試聴"}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="adminActions">
@@ -1694,7 +1890,177 @@ export default function AdminPage() {
             )}
           </div>
         </section>
+
+        <section className="adminPanel wide">
+          <p className="label">TAG MANAGEMENT</p>
+          <h2 className="adminSubTitle">タグ管理</h2>
+
+          <p className="formMessage">
+            タグ名の変更・削除は、そのタグを使っているすべての曲とMusic Packに反映されます。
+          </p>
+
+          {tagSuggestions.length === 0 ? (
+            <div className="empty">現在登録されているタグはありません。</div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: "8px",
+              }}
+            >
+              {tagSuggestions.map((tag) => (
+                <div
+                  key={tag}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto auto",
+                    gap: "6px",
+                    alignItems: "center",
+                    padding: "7px",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "10px",
+                    background: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <input
+                    className="formInput"
+                    style={{ minWidth: 0, padding: "8px 9px" }}
+                    value={tagDrafts[tag] ?? tag}
+                    onChange={(event) =>
+                      setTagDrafts((current) => ({
+                        ...current,
+                        [tag]: event.target.value,
+                      }))
+                    }
+                  />
+
+                  <button
+                    className="secondaryButton"
+                    style={{ padding: "8px 9px" }}
+                    type="button"
+                    onClick={() => handleRenameTag(tag)}
+                    title="タグ名を変更"
+                  >
+                    変更
+                  </button>
+
+                  <button
+                    className="dangerButton"
+                    style={{ padding: "8px 9px" }}
+                    type="button"
+                    onClick={() => handleDeleteTag(tag)}
+                    title="タグを削除"
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
+
+      {showDuplicateReview && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="類似タイトルの確認"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            display: "grid",
+            placeItems: "center",
+            padding: "20px",
+            background: "rgba(0,0,0,0.72)",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          <div
+            style={{
+              width: "min(760px, 96vw)",
+              maxHeight: "82vh",
+              overflowY: "auto",
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: "16px",
+              padding: "20px",
+              background: "#0c0c0f",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+            }}
+          >
+            <p className="label">DUPLICATE CHECK</p>
+            <h2 className="adminSubTitle">似たタイトルの公開曲があります</h2>
+            <p className="formMessage">
+              重複登録の可能性があります。内容を確認して、このまま登録するか選んでください。
+            </p>
+
+            <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
+              {duplicateReview.map((item) => (
+                <div
+                  key={item.groupKey}
+                  style={{
+                    padding: "12px",
+                    border: "1px solid rgba(255,255,255,0.09)",
+                    borderRadius: "12px",
+                    background: "rgba(255,255,255,0.025)",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, marginBottom: "8px" }}>
+                    新規: {item.incomingTitle}
+                  </div>
+
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {item.matches.map((match) => (
+                      <div
+                        key={`${item.groupKey}-${match.id}`}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          alignItems: "center",
+                          padding: "8px 10px",
+                          borderRadius: "9px",
+                          background: "rgba(255,255,255,0.035)",
+                        }}
+                      >
+                        <span>
+                          既存: {match.title}
+                          {match.titleEn !== match.title ? ` / ${match.titleEn}` : ""}
+                        </span>
+                        <strong style={{ whiteSpace: "nowrap" }}>
+                          {Math.round(match.score * 100)}%
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="adminActions"
+              style={{ justifyContent: "flex-end", marginTop: "18px" }}
+            >
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => setShowDuplicateReview(false)}
+              >
+                戻って確認する
+              </button>
+
+              <button
+                className="primaryButton"
+                type="button"
+                onClick={handleConfirmDuplicateUpload}
+              >
+                このまま登録する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

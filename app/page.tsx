@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
+import PackCreator from "@/components/PackCreator";
 
 type Track = {
   id: number;
@@ -29,7 +30,7 @@ type MusicPack = {
   created_at: string;
 };
 
-type CategoryFilter = "すべて" | "コースBGM" | "その他BGM" | "Music Pack";
+type CategoryFilter = "すべて" | "コースBGM" | "その他BGM" | "Music Pack" | "Pack作成";
 
 const translations = {
   ja: {
@@ -41,6 +42,7 @@ const translations = {
     courseBgm: "コースBGM",
     otherBgm: "その他BGM",
     musicPack: "Music Pack",
+    packCreator: "Pack作成",
     newest: "新着順",
     name: "曲名順",
     downloads: "ダウンロード数順",
@@ -71,6 +73,8 @@ const translations = {
     courseBgm: "Course BGM",
     otherBgm: "Other BGM",
     musicPack: "Music Pack",
+    packCreator: "Pack Creator",
+    packCreator: "Pack作成",
     newest: "Newest",
     name: "Title A-Z",
     downloads: "Most Downloaded",
@@ -298,6 +302,7 @@ export default function Home() {
     { value: "コースBGM" as CategoryFilter, label: t.courseBgm },
     { value: "その他BGM" as CategoryFilter, label: t.otherBgm },
     { value: "Music Pack" as CategoryFilter, label: t.musicPack },
+    { value: "Pack作成" as CategoryFilter, label: t.packCreator },
   ];
 
   function handleTagClick(tag: string) {
@@ -459,6 +464,7 @@ export default function Home() {
   }
 
   const isPackView = category === "Music Pack";
+  const isPackCreatorView = category === "Pack作成";
 
   return (
     <div className="page">
@@ -495,52 +501,54 @@ export default function Home() {
         </section>
 
         <section className="controls">
-          <div className="controlTop">
-            <input
-              className="search"
-              type="text"
-              placeholder={isPackView ? t.searchPacks : t.searchTracks}
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setRandomTrackId(null);
-              }}
-            />
+          {!isPackCreatorView && (
+            <div className="controlTop">
+              <input
+                className="search"
+                type="text"
+                placeholder={isPackView ? t.searchPacks : t.searchTracks}
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setRandomTrackId(null);
+                }}
+              />
 
-            <select
-              className="sort"
-              value={sort}
-              onChange={(event) => {
-                setSort(event.target.value);
-                setRandomTrackId(null);
-              }}
-              aria-label={t.newest}
-            >
-              <option value="newest">{t.newest}</option>
-              <option value="name">{t.name}</option>
-              <option value="downloads">{t.downloads}</option>
-            </select>
+              <select
+                className="sort"
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value);
+                  setRandomTrackId(null);
+                }}
+                aria-label={t.newest}
+              >
+                <option value="newest">{t.newest}</option>
+                <option value="name">{t.name}</option>
+                <option value="downloads">{t.downloads}</option>
+              </select>
 
-            {!isPackView &&
-              (randomTrackId === null ? (
-                <button
-                  className="secondaryButton"
-                  type="button"
-                  onClick={handleRandomPick}
-                  disabled={filteredTracks.length === 0}
-                >
-                  {t.random}
-                </button>
-              ) : (
-                <button
-                  className="secondaryButton"
-                  type="button"
-                  onClick={() => setRandomTrackId(null)}
-                >
-                  {t.clearRandom}
-                </button>
-              ))}
-          </div>
+              {!isPackView &&
+                (randomTrackId === null ? (
+                  <button
+                    className="secondaryButton"
+                    type="button"
+                    onClick={handleRandomPick}
+                    disabled={filteredTracks.length === 0}
+                  >
+                    {t.random}
+                  </button>
+                ) : (
+                  <button
+                    className="secondaryButton"
+                    type="button"
+                    onClick={() => setRandomTrackId(null)}
+                  >
+                    {t.clearRandom}
+                  </button>
+                ))}
+            </div>
+          )}
 
           <div className="categories">
             {categories.map((item) => (
@@ -561,7 +569,21 @@ export default function Home() {
           </div>
         </section>
 
-        {!isPackView ? (
+        {isPackCreatorView ? (
+          <PackCreator
+            tracks={tracks}
+            language={language}
+            volume={volume}
+            playingKey={playingKey}
+            onPreview={(track, previewUrl, label) => {
+              const fullTrack = tracks.find((item) => item.id === track.id);
+
+              if (fullTrack) {
+                handlePreview(fullTrack, previewUrl, label);
+              }
+            }}
+          />
+        ) : !isPackView ? (
           <section className="library">
             <div className="sectionHeader">
               <h2>{t.published}</h2>

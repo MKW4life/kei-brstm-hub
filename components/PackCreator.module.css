@@ -1,0 +1,406 @@
+.creator {
+  /*
+   * Pack Creatorだけ通常サイトのmax-widthから外し、
+   * デスクトップでは画面の左右を広く使う。
+   */
+  width: min(1560px, calc(100vw - 40px));
+  max-width: none;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 28px;
+}
+
+.topGrid {
+  display: grid;
+  grid-template-columns: minmax(270px, 310px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.libraryPanel {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.panelHeader,
+.workspaceHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.panelHeader h2,
+.workspaceHeader h2 {
+  margin: 3px 0 0;
+}
+
+.eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  opacity: 0.48;
+}
+
+.search {
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+}
+
+.help {
+  margin: 10px 0;
+  font-size: 10px;
+  line-height: 1.55;
+  opacity: 0.52;
+}
+
+.trackPalette {
+  min-height: 160px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+
+.paletteTrack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: grab;
+}
+
+.paletteTrack:hover,
+.paletteTrackSelected {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.paletteTrack button,
+.assignedActions button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.paletteTitle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.paletteMeta {
+  margin-top: 3px;
+  font-size: 9px;
+  opacity: 0.45;
+}
+
+.workspace {
+  min-width: 0;
+}
+
+.workspaceHeader {
+  margin-bottom: 16px;
+}
+
+.workspaceHeader p {
+  max-width: 660px;
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.6;
+  opacity: 0.5;
+}
+
+.saveArea {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.saveArea span {
+  font-size: 10px;
+  opacity: 0.52;
+}
+
+.saveButton,
+.resetButton {
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.saveButton {
+  border: 0;
+  background: #fff;
+  color: #08090b;
+}
+
+.resetButton {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: inherit;
+}
+
+.saveButton:disabled,
+.resetButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.progress {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 10px;
+}
+
+.error {
+  white-space: pre-wrap;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 178, 90, 0.26);
+  border-radius: 10px;
+  color: #ffc676;
+  background: rgba(255, 178, 90, 0.06);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.sectionTitle {
+  margin: 28px 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.groupLabel {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 5px;
+}
+
+.groupLabel img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.groupLabel strong,
+.groupLabel small {
+  display: block;
+}
+
+.groupLabel strong {
+  font-size: 10px;
+}
+
+.groupLabel small {
+  margin-top: 3px;
+  font-size: 8px;
+  opacity: 0.42;
+}
+
+.toolIcon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+}
+
+.slotGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(175px, 1fr));
+  gap: 8px;
+}
+
+.slot {
+  min-height: 120px;
+  padding: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.slot:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.slotFilled {
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.slotHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slotName {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.fileName {
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 7px;
+  line-height: 1.35;
+  opacity: 0.36;
+  overflow-wrap: anywhere;
+}
+
+.smallSlotIcon {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.sharedBadge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 7px;
+  opacity: 0.62;
+}
+
+.emptySlot {
+  min-height: 46px;
+  margin-top: 9px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 9px;
+  opacity: 0.32;
+}
+
+.assignedTrack {
+  margin-top: 9px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.assignedTitle {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.assignedActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.assignedActions button {
+  padding: 4px 7px;
+  font-size: 8px;
+}
+
+.warning {
+  margin-top: 6px;
+  color: #ffbb70;
+  font-size: 8px;
+}
+
+@media (max-width: 1150px) {
+  .creator {
+    width: 100%;
+    max-width: none;
+    left: auto;
+    transform: none;
+  }
+
+  .topGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryPanel {
+    position: static;
+    max-height: none;
+  }
+
+  .trackPalette {
+    max-height: 300px;
+  }
+
+  .slotGrid {
+    grid-template-columns: repeat(2, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .group {
+    grid-template-columns: 1fr;
+  }
+
+  .slotGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceHeader {
+    flex-direction: column;
+  }
+
+  .saveArea {
+    justify-content: flex-start;
+  }
+
+  .paletteTrack {
+    cursor: pointer;
+  }
+}
