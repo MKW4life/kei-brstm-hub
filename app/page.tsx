@@ -74,7 +74,6 @@ const translations = {
     otherBgm: "Other BGM",
     musicPack: "Music Pack",
     packCreator: "Pack Creator",
-    packCreator: "Pack作成",
     newest: "Newest",
     name: "Title A-Z",
     downloads: "Most Downloaded",
