@@ -315,17 +315,37 @@ export default function AdminPage() {
   const [packZipUrl, setPackZipUrl] = useState("");
   const [packPublished, setPackPublished] = useState(true);
   const [packSubmitting, setPackSubmitting] = useState(false);
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
 
   const tagSuggestions = useMemo(() => {
-    const allTags = tracks.flatMap((track) =>
-      (track.tags || "")
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-    );
+    const allTags = [
+      ...tracks.flatMap((track) =>
+        (track.tags || "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      ),
+      ...packs.flatMap((pack) =>
+        (pack.tags || "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      ),
+    ];
 
-    return Array.from(new Set(allTags)).sort((a, b) => a.localeCompare(b));
-  }, [tracks]);
+    const uniqueTags = new Map<string, string>();
+
+    for (const tag of allTags) {
+      const normalized = tag.toLowerCase();
+      if (!uniqueTags.has(normalized)) {
+        uniqueTags.set(normalized, tag);
+      }
+    }
+
+    return Array.from(uniqueTags.values()).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [tracks, packs]);
 
   useEffect(() => {
     async function checkLogin() {
@@ -493,9 +513,20 @@ export default function AdminPage() {
           }
 
           if (group.key === targetGroupKey) {
+            const movedRole: BulkRole =
+              movingFile.extension === "brstm"
+                ? "lap3Brstm"
+                : "lap3Preview";
+
             return {
               ...group,
-              files: [...group.files, movingFile],
+              files: [
+                ...group.files,
+                {
+                  ...movingFile,
+                  role: movedRole,
+                },
+              ],
             };
           }
 
@@ -505,6 +536,142 @@ export default function AdminPage() {
 
       return next;
     });
+  }
+
+  function splitTagList(value: string) {
+    return (value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function buildRenamedTagList(
+    value: string,
+    oldTag: string,
+    newTag: string | null
+  ) {
+    const oldNormalized = oldTag.toLowerCase();
+    const result: string[] = [];
+    const seen = new Set<string>();
+
+    for (const tag of splitTagList(value)) {
+      let nextTag = tag;
+
+      if (tag.toLowerCase() === oldNormalized) {
+        if (newTag === null) {
+          continue;
+        }
+
+        nextTag = newTag;
+      }
+
+      const normalized = nextTag.toLowerCase();
+
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        result.push(nextTag);
+      }
+    }
+
+    return result.join(", ");
+  }
+
+  async function updateTagEverywhere(oldTag: string, newTag: string | null) {
+    const affectedTracks = tracks.filter((track) =>
+      splitTagList(track.tags).some(
+        (tag) => tag.toLowerCase() === oldTag.toLowerCase()
+      )
+    );
+
+    const affectedPacks = packs.filter((pack) =>
+      splitTagList(pack.tags).some(
+        (tag) => tag.toLowerCase() === oldTag.toLowerCase()
+      )
+    );
+
+    for (const track of affectedTracks) {
+      const nextTags = buildRenamedTagList(track.tags, oldTag, newTag);
+
+      const { error } = await supabase
+        .from("tracks")
+        .update({ tags: nextTags })
+        .eq("id", track.id);
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    for (const pack of affectedPacks) {
+      const nextTags = buildRenamedTagList(pack.tags, oldTag, newTag);
+
+      const { error } = await supabase
+        .from("music_packs")
+        .update({ tags: nextTags })
+        .eq("id", pack.id);
+
+      if (error) {
+        throw error;
+      }
+    }
+  }
+
+  async function handleRenameTag(oldTag: string) {
+    const newTag = (tagDrafts[oldTag] ?? oldTag).trim();
+
+    if (!newTag) {
+      setMessage("新しいタグ名を入力してください。");
+      return;
+    }
+
+    if (newTag.toLowerCase() === oldTag.toLowerCase()) {
+      setMessage("タグ名は変更されていません。");
+      return;
+    }
+
+    try {
+      setMessage(`#${oldTag} を #${newTag} に変更中...`);
+
+      await updateTagEverywhere(oldTag, newTag);
+
+      setTagDrafts((current) => {
+        const next = { ...current };
+        delete next[oldTag];
+        return next;
+      });
+
+      setMessage(`#${oldTag} を #${newTag} に変更しました。`);
+      await Promise.all([loadTracks(), loadPacks()]);
+    } catch (error) {
+      console.error(error);
+      setMessage("タグ名の変更に失敗しました。");
+    }
+  }
+
+  async function handleDeleteTag(tag: string) {
+    const ok = window.confirm(
+      `#${tag} をすべての曲・Music Packから削除しますか？`
+    );
+
+    if (!ok) return;
+
+    try {
+      setMessage(`#${tag} を削除中...`);
+
+      await updateTagEverywhere(tag, null);
+
+      setTagDrafts((current) => {
+        const next = { ...current };
+        delete next[tag];
+        return next;
+      });
+
+      setMessage(`#${tag} をすべての登録から削除しました。`);
+      await Promise.all([loadTracks(), loadPacks()]);
+    } catch (error) {
+      console.error(error);
+      setMessage("タグの削除に失敗しました。");
+    }
   }
 
   function addSuggestedTagToGroup(key: string, tag: string) {
@@ -537,7 +704,7 @@ export default function AdminPage() {
       case "lap3Preview":
         return "Lap 3 MP3";
       default:
-        return "無視";
+        return "アップロードしない";
     }
   }
 
@@ -914,6 +1081,70 @@ export default function AdminPage() {
 
       <main className="main">
         <section className="adminPanel wide">
+          <p className="label">TAG MANAGEMENT</p>
+          <h1 className="adminTitle">タグ管理</h1>
+
+          <p className="formMessage">
+            ここでタグ名を変更すると、そのタグを使っているすべての曲とMusic Packに反映されます。
+            削除すると、すべての登録からそのタグだけを取り除きます。
+          </p>
+
+          {tagSuggestions.length === 0 ? (
+            <div className="empty">現在登録されているタグはありません。</div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              {tagSuggestions.map((tag) => (
+                <div
+                  key={tag}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(220px, 1fr) auto auto",
+                    gap: "8px",
+                    alignItems: "center",
+                    padding: "10px",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "12px",
+                    background: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <input
+                    className="formInput"
+                    value={tagDrafts[tag] ?? tag}
+                    onChange={(event) =>
+                      setTagDrafts((current) => ({
+                        ...current,
+                        [tag]: event.target.value,
+                      }))
+                    }
+                  />
+
+                  <button
+                    className="secondaryButton"
+                    type="button"
+                    onClick={() => handleRenameTag(tag)}
+                  >
+                    名前変更
+                  </button>
+
+                  <button
+                    className="dangerButton"
+                    type="button"
+                    onClick={() => handleDeleteTag(tag)}
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="adminPanel wide">
           <p className="label">ZIP MUSIC PACK</p>
           <h1 className="adminTitle">ZIPパックを追加</h1>
 
@@ -1023,6 +1254,7 @@ export default function AdminPage() {
             その <code>3</code> を除いた名前のファイルが同時に存在する場合だけ
             Lap 3 として同じ曲にまとめます。
             判定が違う場合は、各ファイルの「所属曲」と「役割」を変更できます。
+            別の所属曲へ移動したファイルは、自動的にその曲のLap 3として扱います。
           </p>
 
           <label className="formLabel">
@@ -1223,7 +1455,7 @@ export default function AdminPage() {
                                 <option value="lap3Brstm">Lap 3 BRSTM</option>
                                 <option value="normalPreview">通常MP3</option>
                                 <option value="lap3Preview">Lap 3 MP3</option>
-                                <option value="ignore">無視</option>
+                                <option value="ignore">アップロードしない</option>
                               </select>
                             </label>
                           </div>
