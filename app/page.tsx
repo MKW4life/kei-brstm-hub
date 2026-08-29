@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import KeiProjectRail from "@/components/KeiProjectRail";
 
 type Track = {
   id: number;
   title: string;
   title_en: string;
   category: string;
-  example_ct: string;
-  description: string;
   tags: string;
   loop_type: string;
   brstm_url: string;
@@ -21,28 +20,41 @@ type Track = {
   created_at: string;
 };
 
+type MusicPack = {
+  id: number;
+  title: string;
+  tags: string;
+  youtube_url: string;
+  zip_url: string;
+  created_at: string;
+};
+
+type CategoryFilter = "すべて" | "コースBGM" | "その他BGM" | "Music Pack";
+
 const translations = {
   ja: {
     subtitle:
       "Mario Kart Wii / CTGP-R 向けミュージックハックを検索・試聴・ダウンロード",
-    search: "曲名・タグ・使用例で検索",
+    searchTracks: "曲名・タグで検索",
+    searchPacks: "パック名・タグで検索",
     all: "すべて",
     courseBgm: "コースBGM",
     otherBgm: "その他BGM",
+    musicPack: "Music Pack",
     newest: "新着順",
     name: "曲名順",
     downloads: "ダウンロード数順",
     random: "ランダム選曲",
     clearRandom: "ランダム解除",
     published: "公開中のBRSTM",
-    example: "使用例",
+    publishedPacks: "公開中のMusic Packs",
+    packDownload: "ZIPをダウンロード",
     normal: "通常",
     lap3: "Lap 3",
-    preview: "試聴",
-    stop: "停止",
     download: "ダウンロード",
     admin: "管理者ログイン",
     empty: "公開中の音源がありません。",
+    emptyPacks: "公開中のMusic Packがありません。",
     loading: "読み込み中...",
     error: "曲データを読み込めませんでした。",
     noPreview: "この曲にはプレビュー音源が登録されていません。",
@@ -53,24 +65,26 @@ const translations = {
   en: {
     subtitle:
       "Search, preview, and download music hacks for Mario Kart Wii / CTGP-R",
-    search: "Search by title, tags, or usage example",
+    searchTracks: "Search by title or tags",
+    searchPacks: "Search packs by title or tags",
     all: "All",
     courseBgm: "Course BGM",
     otherBgm: "Other BGM",
+    musicPack: "Music Pack",
     newest: "Newest",
     name: "Title A-Z",
     downloads: "Most Downloaded",
     random: "Random Pick",
     clearRandom: "Clear Random",
     published: "Available BRSTMs",
-    example: "Usage example",
+    publishedPacks: "Available Music Packs",
+    packDownload: "Download ZIP",
     normal: "Normal",
     lap3: "Lap 3",
-    preview: "Preview",
-    stop: "Stop",
     download: "Download",
     admin: "Admin Login",
     empty: "No published audio found.",
+    emptyPacks: "No published music packs.",
     loading: "Loading...",
     error: "Failed to load track data.",
     noPreview: "No preview audio has been registered for this track.",
@@ -81,43 +95,81 @@ const translations = {
 };
 
 function createDownloadUrl(url: string) {
-  if (!url) {
-    return "";
-  }
-
+  if (!url) return "";
   return url.includes("?") ? `${url}&download=` : `${url}?download=`;
 }
 
-function getLoopLabel(loopType: string) {
-  if (loopType === "bad_loop") {
-    return "Bad Loop";
-  }
+function getLoopValue(loopType: string) {
+  return loopType === "loop" || loopType === "perfect_loop" ? "Loop" : "No";
+}
 
-  if (loopType === "no_loop") {
-    return "No Loop";
-  }
+function getYouTubeEmbedUrl(url: string) {
+  if (!url) return "";
 
-  return "Perfect Loop";
+  try {
+    const parsed = new URL(url);
+    let id = "";
+
+    if (parsed.hostname === "youtu.be") {
+      id = parsed.pathname.replace(/^\/+/, "").split("/")[0];
+    } else if (
+      parsed.hostname.includes("youtube.com") ||
+      parsed.hostname.includes("youtube-nocookie.com")
+    ) {
+      id = parsed.searchParams.get("v") || "";
+
+      if (!id) {
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        const markerIndex = parts.findIndex((part) =>
+          ["embed", "shorts", "live"].includes(part)
+        );
+
+        if (markerIndex >= 0 && parts[markerIndex + 1]) {
+          id = parts[markerIndex + 1];
+        }
+      }
+    }
+
+    if (!id) return "";
+    return `https://www.youtube-nocookie.com/embed/${id}`;
+  } catch {
+    return "";
+  }
 }
 
 export default function Home() {
   const [language, setLanguage] = useState<"ja" | "en">("ja");
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("すべて");
+  const [category, setCategory] = useState<CategoryFilter>("すべて");
   const [sort, setSort] = useState("newest");
   const [randomTrackId, setRandomTrackId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [packs, setPacks] = useState<MusicPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
+  const [volume, setVolume] = useState(0.5);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
   const t = translations[language];
 
   useEffect(() => {
     loadTracks();
+    loadPacks();
+
+    const savedVolume = window.localStorage.getItem("kei-brstm-hub-volume");
+    if (savedVolume !== null) {
+      const parsed = Number(savedVolume);
+      if (!Number.isNaN(parsed)) {
+        setVolume(Math.min(1, Math.max(0, parsed)));
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+    window.localStorage.setItem("kei-brstm-hub-volume", String(volume));
+  }, [volume]);
 
   useEffect(() => {
     return () => {
@@ -140,8 +192,6 @@ export default function Home() {
         title,
         title_en,
         category,
-        example_ct,
-        description,
         tags,
         loop_type,
         brstm_url,
@@ -166,12 +216,33 @@ export default function Home() {
     setLoading(false);
   }
 
-  function getDisplayTitle(track: Track) {
-    if (language === "en") {
-      return track.title_en || track.title;
+  async function loadPacks() {
+    const { data, error } = await supabase
+      .from("music_packs")
+      .select(
+        `
+        id,
+        title,
+        tags,
+        youtube_url,
+        zip_url,
+        created_at
+      `
+      )
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Music packs could not be loaded.", error);
+      setPacks([]);
+      return;
     }
 
-    return track.title;
+    setPacks((data as MusicPack[]) ?? []);
+  }
+
+  function getDisplayTitle(track: Track) {
+    return language === "en" ? track.title_en || track.title : track.title;
   }
 
   const filteredTracks = useMemo(() => {
@@ -184,10 +255,8 @@ export default function Home() {
           track.title,
           track.title_en,
           track.category,
-          track.example_ct,
-          track.description,
           track.tags,
-          getLoopLabel(track.loop_type),
+          getLoopValue(track.loop_type),
         ]
           .join(" ")
           .toLowerCase();
@@ -201,60 +270,54 @@ export default function Home() {
           return titleA.localeCompare(titleB);
         }
 
-        if (sort === "downloads") {
-          return b.download_count - a.download_count;
-        }
-
+        if (sort === "downloads") return b.download_count - a.download_count;
         return b.created_at.localeCompare(a.created_at);
       });
   }, [tracks, query, category, sort, language]);
 
   const visibleTracks = useMemo(() => {
-    if (randomTrackId === null) {
-      return filteredTracks;
-    }
-
+    if (randomTrackId === null) return filteredTracks;
     return filteredTracks.filter((track) => track.id === randomTrackId);
   }, [filteredTracks, randomTrackId]);
 
+  const visiblePacks = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+
+    return [...packs]
+      .filter((pack) =>
+        [pack.title, pack.tags].join(" ").toLowerCase().includes(keyword)
+      )
+      .sort((a, b) => {
+        if (sort === "name") return a.title.localeCompare(b.title);
+        return b.created_at.localeCompare(a.created_at);
+      });
+  }, [packs, query, sort]);
+
   const categories = [
-    { value: "すべて", label: t.all },
-    { value: "コースBGM", label: t.courseBgm },
-    { value: "その他BGM", label: t.otherBgm },
+    { value: "すべて" as CategoryFilter, label: t.all },
+    { value: "コースBGM" as CategoryFilter, label: t.courseBgm },
+    { value: "その他BGM" as CategoryFilter, label: t.otherBgm },
+    { value: "Music Pack" as CategoryFilter, label: t.musicPack },
   ];
 
   function handleTagClick(tag: string) {
     setQuery(tag);
-    setCategory("すべて");
     setRandomTrackId(null);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleRandomPick() {
-    if (filteredTracks.length === 0) {
-      return;
-    }
-
+    if (filteredTracks.length === 0) return;
     const randomIndex = Math.floor(Math.random() * filteredTracks.length);
-    const randomTrack = filteredTracks[randomIndex];
-
-    setRandomTrackId(randomTrack.id);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    setRandomTrackId(filteredTracks[randomIndex].id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function clearRandomPick() {
-    setRandomTrackId(null);
-  }
-
-  async function handlePreview(track: Track, previewUrl: string, label: string) {
+  async function handlePreview(
+    track: Track,
+    previewUrl: string,
+    label: string
+  ) {
     if (!previewUrl) {
       window.alert(t.noPreview);
       return;
@@ -276,6 +339,7 @@ export default function Home() {
     }
 
     const nextAudio = new Audio(previewUrl);
+    nextAudio.volume = volume;
 
     nextAudio.addEventListener("ended", () => {
       setPlayingKey(null);
@@ -320,7 +384,7 @@ export default function Home() {
     );
   }
 
-  function renderFileButtons(
+  function renderTrackFileButtons(
     track: Track,
     label: string,
     previewUrl: string,
@@ -364,35 +428,42 @@ export default function Home() {
     );
   }
 
-  function renderTags(tags: string) {
+  function renderTags(tags: string, clickable = false) {
     const tagList = tags
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
 
-    if (tagList.length === 0) {
-      return null;
-    }
+    if (tagList.length === 0) return null;
 
     return (
       <div className="trackTags">
-        {tagList.map((tag) => (
-          <button
-            className="tag clickableTag"
-            key={tag}
-            type="button"
-            onClick={() => handleTagClick(tag)}
-            title={`Search: ${tag}`}
-          >
-            #{tag}
-          </button>
-        ))}
+        {tagList.map((tag) =>
+          clickable ? (
+            <button
+              className="tag clickableTag"
+              key={tag}
+              type="button"
+              onClick={() => handleTagClick(tag)}
+            >
+              #{tag}
+            </button>
+          ) : (
+            <span className="tag" key={tag}>
+              #{tag}
+            </span>
+          )
+        )}
       </div>
     );
   }
 
+  const isPackView = category === "Music Pack";
+
   return (
     <div className="page">
+      <KeiProjectRail volume={volume} onVolumeChange={setVolume} />
+
       <header className="header">
         <div className="headerInner">
           <Link className="logoArea linkLogo" href="/">
@@ -428,7 +499,7 @@ export default function Home() {
             <input
               className="search"
               type="text"
-              placeholder={t.search}
+              placeholder={isPackView ? t.searchPacks : t.searchTracks}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -450,24 +521,25 @@ export default function Home() {
               <option value="downloads">{t.downloads}</option>
             </select>
 
-            {randomTrackId === null ? (
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={handleRandomPick}
-                disabled={filteredTracks.length === 0}
-              >
-                {t.random}
-              </button>
-            ) : (
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={clearRandomPick}
-              >
-                {t.clearRandom}
-              </button>
-            )}
+            {!isPackView &&
+              (randomTrackId === null ? (
+                <button
+                  className="secondaryButton"
+                  type="button"
+                  onClick={handleRandomPick}
+                  disabled={filteredTracks.length === 0}
+                >
+                  {t.random}
+                </button>
+              ) : (
+                <button
+                  className="secondaryButton"
+                  type="button"
+                  onClick={() => setRandomTrackId(null)}
+                >
+                  {t.clearRandom}
+                </button>
+              ))}
           </div>
 
           <div className="categories">
@@ -489,74 +561,152 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="library">
-          <div className="sectionHeader">
-            <h2>{t.published}</h2>
-            <span>{visibleTracks.length} tracks</span>
-          </div>
+        {!isPackView ? (
+          <section className="library">
+            <div className="sectionHeader">
+              <h2>{t.published}</h2>
+              <span>{visibleTracks.length} tracks</span>
+            </div>
 
-          {loading && <div className="empty">{t.loading}</div>}
+            {loading && <div className="empty">{t.loading}</div>}
+            {loadError && <div className="empty">{t.error}</div>}
 
-          {loadError && <div className="empty">{t.error}</div>}
+            {!loading && !loadError && (
+              <div className="trackList">
+                {visibleTracks.map((track) => (
+                  <article className="trackCard" key={track.id}>
+                    <div className="trackInfo">
+                      <div className="trackTitleRow">
+                        <h3>{getDisplayTitle(track)}</h3>
+                        <span className="tag">{track.category}</span>
+                        <span className="tag">{getLoopValue(track.loop_type)}</span>
+                      </div>
 
-          {!loading && !loadError && (
-            <div className="trackList">
-              {visibleTracks.map((track) => (
-                <article className="trackCard" key={track.id}>
-                  <div className="trackInfo">
-                    <div className="trackTitleRow">
-                      <h3>{getDisplayTitle(track)}</h3>
-                      <span className="tag">{track.category}</span>
-                      <span className="tag">{getLoopLabel(track.loop_type)}</span>
+                      {language === "en" &&
+                        track.title_en &&
+                        track.title_en !== track.title && (
+                          <p className="source">{track.title}</p>
+                        )}
+
+                      {track.tags && renderTags(track.tags, true)}
                     </div>
 
-                    {language === "en" &&
-                      track.title_en &&
-                      track.title_en !== track.title && (
-                        <p className="source">{track.title}</p>
+                    <div className="trackActions vertical">
+                      {renderTrackFileButtons(
+                        track,
+                        t.normal,
+                        track.preview_url,
+                        track.brstm_url
                       )}
 
-                    <div className="trackMeta">
-                      <span>
-                        {t.example}: {track.example_ct || "-"}
-                      </span>
+                      {renderTrackFileButtons(
+                        track,
+                        t.lap3,
+                        track.preview_lap3_url,
+                        track.brstm_lap3_url
+                      )}
+                    </div>
+                  </article>
+                ))}
+
+                {visibleTracks.length === 0 && (
+                  <div className="empty">{t.empty}</div>
+                )}
+              </div>
+            )}
+          </section>
+        ) : (
+          <section className="library">
+            <div className="sectionHeader">
+              <h2>{t.publishedPacks}</h2>
+              <span>{visiblePacks.length} packs</span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                gap: "18px",
+              }}
+            >
+              {visiblePacks.map((pack) => {
+                const embedUrl = getYouTubeEmbedUrl(pack.youtube_url);
+
+                return (
+                  <article
+                    key={pack.id}
+                    style={{
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: "16px",
+                      background: "rgba(255,255,255,0.018)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        aspectRatio: "16 / 9",
+                        background: "rgba(255,255,255,0.03)",
+                      }}
+                    >
+                      {embedUrl ? (
+                        <iframe
+                          src={embedUrl}
+                          title={`${pack.title} preview`}
+                          style={{ width: "100%", height: "100%", border: 0 }}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            display: "grid",
+                            placeItems: "center",
+                            opacity: 0.45,
+                            fontSize: "12px",
+                          }}
+                        >
+                          YouTube preview not set
+                        </div>
+                      )}
                     </div>
 
-                    {track.description && (
-                      <p className="description">{track.description}</p>
-                    )}
+                    <div style={{ padding: "16px" }}>
+                      <h3 style={{ margin: 0 }}>{pack.title}</h3>
+                      {pack.tags && (
+                        <div style={{ marginTop: "12px" }}>
+                          {renderTags(pack.tags, false)}
+                        </div>
+                      )}
 
-                    {track.tags && renderTags(track.tags)}
-                  </div>
-
-                  <div className="trackActions vertical">
-                    <span className="downloadCount">
-                      ↓ {track.download_count}
-                    </span>
-
-                    {renderFileButtons(
-                      track,
-                      t.normal,
-                      track.preview_url,
-                      track.brstm_url
-                    )}
-
-                    {renderFileButtons(
-                      track,
-                      t.lap3,
-                      track.preview_lap3_url,
-                      track.brstm_lap3_url
-                    )}
-                  </div>
-                </article>
-              ))}
-
-              {visibleTracks.length === 0 && (
-                <div className="empty">{t.empty}</div>
-              )}
+                      <div style={{ marginTop: "16px" }}>
+                        {pack.zip_url ? (
+                          <a
+                            className="primaryButton linkButton"
+                            href={createDownloadUrl(pack.zip_url)}
+                          >
+                            {t.packDownload}
+                          </a>
+                        ) : (
+                          <button className="primaryButton" type="button" disabled>
+                            {t.packDownload}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-          )}
-        </section>
+
+            {visiblePacks.length === 0 && (
+              <div className="empty" style={{ marginTop: "18px" }}>
+                {t.emptyPacks}
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
       <footer className="footer">
