@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
+import AdminTagPicker from "@/components/AdminTagPicker";
 
 type Track = {
   id: number;
@@ -309,7 +310,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
       ({
         key,
         title: item.baseName,
-        titleEn: item.baseName,
+        titleEn: "",
         category: "コースBGM",
         tags: "",
         loopType: "loop",
@@ -422,6 +423,30 @@ export default function AdminPage() {
     );
   }, [tracks, packs]);
 
+  const tagPickerSuggestions = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>();
+
+    const addTags = (value: string) => {
+      for (const tag of splitTagList(value)) {
+        const normalized = tag.toLowerCase();
+        const current = counts.get(normalized);
+
+        if (current) {
+          current.count += 1;
+        } else {
+          counts.set(normalized, { label: tag, count: 1 });
+        }
+      }
+    };
+
+    tracks.forEach((track) => addTags(track.tags || ""));
+    packs.forEach((pack) => addTags(pack.tags || ""));
+
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .map((item) => item.label);
+  }, [tracks, packs]);
+
   useEffect(() => {
     async function checkLogin() {
       const { data } = await supabase.auth.getUser();
@@ -482,7 +507,7 @@ export default function AdminPage() {
     );
 
     audio.volume = Number.isFinite(savedVolume)
-      ? Math.min(1, Math.max(0, savedVolume))
+      ? Math.min(0.5, Math.max(0, savedVolume))
       : 0.5;
 
     audio.addEventListener("ended", () => {
@@ -1349,14 +1374,12 @@ export default function AdminPage() {
               </label>
             </div>
 
-            <label className="formLabel">
-              タグ
-              <input
-                className="formInput"
-                value={packTags}
-                onChange={(event) => setPackTags(event.target.value)}
-              />
-            </label>
+            <AdminTagPicker
+              label="タグ"
+              value={packTags}
+              onChange={setPackTags}
+              suggestions={tagPickerSuggestions}
+            />
 
             <button
               className="primaryButton fullButton"
@@ -1512,33 +1535,14 @@ export default function AdminPage() {
                         </label>
                       </div>
 
-                      <label className="formLabel">
-                        タグ
-                        <input
-                          className="formInput"
-                          value={group.tags}
-                          onChange={(event) =>
-                            updateBulkGroup(group.key, {
-                              tags: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      {tagSuggestions.length > 0 && (
-                        <div className="trackTags">
-                          {tagSuggestions.map((tag) => (
-                            <button
-                              className="tag clickableTag"
-                              type="button"
-                              key={tag}
-                              onClick={() => addSuggestedTagToGroup(group.key, tag)}
-                            >
-                              #{tag}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      <AdminTagPicker
+                        label="タグ"
+                        value={group.tags}
+                        onChange={(nextTags) =>
+                          updateBulkGroup(group.key, { tags: nextTags })
+                        }
+                        suggestions={tagPickerSuggestions}
+                      />
 
                       <div
                         style={{
@@ -1719,14 +1723,12 @@ export default function AdminPage() {
                       </label>
                     </div>
 
-                    <label className="formLabel">
-                      タグ
-                      <input
-                        className="formInput"
-                        value={editTags}
-                        onChange={(event) => setEditTags(event.target.value)}
-                      />
-                    </label>
+                    <AdminTagPicker
+                      label="タグ"
+                      value={editTags}
+                      onChange={setEditTags}
+                      suggestions={tagPickerSuggestions}
+                    />
 
                     <div className="formGrid">
                       <label className="formLabel">

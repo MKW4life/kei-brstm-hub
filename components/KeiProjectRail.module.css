@@ -1,71 +1,9 @@
 .rail {
   position: fixed;
   left: 10px;
-  top: 10px;
+  top: 20px;
   z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   pointer-events: none;
-}
-
-.volumeDock {
-  width: 220px;
-  padding: 9px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(118, 145, 255, 0.42);
-  background:
-    linear-gradient(180deg, rgba(18, 20, 45, 0.96), rgba(8, 10, 23, 0.96));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.34);
-  color: #fff;
-  pointer-events: auto;
-}
-
-.volumeTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.volumeTitle {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.volumeTop strong {
-  font-size: 11px;
-}
-
-.volumeSlider {
-  display: block;
-  width: 100%;
-  cursor: pointer;
-}
-
-.volumeActions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.volumeActions button {
-  border: 1px solid rgba(118, 145, 255, 0.28);
-  border-radius: 8px;
-  padding: 5px 4px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.volumeActions button:hover {
-  background: rgba(255, 255, 255, 0.08);
 }
 
 .projectArea {
@@ -117,19 +55,15 @@
 @media (max-width: 760px) {
   .rail {
     left: 8px;
-    top: 8px;
-  }
-
-  .volumeDock {
-    width: 192px;
+    top: 14px;
   }
 
   .projectButton {
-    min-width: 108px;
-    min-height: 40px;
+    min-width: 104px;
+    min-height: 38px;
   }
 
   .projectPanel {
-    min-width: 190px;
+    min-width: 184px;
   }
 }

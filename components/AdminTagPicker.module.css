@@ -1,0 +1,124 @@
+.root {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.count {
+  font-size: 10px;
+  opacity: 0.42;
+}
+
+.selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selectedTag,
+.suggestionTag,
+.addButton,
+.moreButton {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  cursor: pointer;
+}
+
+.selectedTag {
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.selectedTag:hover {
+  border-color: rgba(255, 110, 110, 0.58);
+  color: rgb(255, 165, 165);
+}
+
+.searchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 7px;
+}
+
+.search {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+}
+
+.search:focus {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.addButton,
+.moreButton {
+  border-radius: 10px;
+  padding: 0 11px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.addButton:hover,
+.moreButton:hover,
+.suggestionTag:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.suggestions {
+  max-height: 150px;
+  overflow: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.suggestionLabel,
+.empty {
+  width: 100%;
+  font-size: 9px;
+  opacity: 0.42;
+}
+
+.suggestionTag {
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+@media (max-width: 650px) {
+  .searchRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .moreButton {
+    grid-column: 1 / -1;
+    min-height: 34px;
+  }
+}

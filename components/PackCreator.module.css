@@ -6,9 +6,10 @@
 
 .topGrid {
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(480px, 540px) max-content;
+  gap: 22px;
   align-items: start;
+  justify-content: center;
 }
 
 .libraryPanel {
@@ -71,7 +72,7 @@
 .paletteTrack {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -96,10 +97,20 @@
   cursor: pointer;
 }
 
+.paletteTitleRow,
+.assignedTitleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
 .paletteTitle {
+  min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  text-overflow: clip;
+  line-height: 1.3;
   font-size: 11px;
   font-weight: 750;
 }
@@ -110,7 +121,32 @@
   opacity: 0.45;
 }
 
+.loopIcon {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-top: -1px;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.loopOn {
+  color: #57d98c;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(87, 217, 140, 0.18));
+}
+
+.loopOff {
+  color: rgba(255, 255, 255, 0.24);
+  opacity: 0.72;
+}
+
 .workspace {
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -198,14 +234,16 @@
 .groups {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .group {
+  width: max-content;
+  max-width: 100%;
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr);
-  gap: 10px;
-  padding: 9px;
+  grid-template-columns: 118px minmax(0, max-content);
+  gap: 8px;
+  padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.012);
@@ -213,14 +251,14 @@
 
 .groupLabel {
   display: flex;
-  gap: 9px;
+  gap: 8px;
   align-items: center;
-  padding: 5px;
+  padding: 4px;
 }
 
 .groupLabel img {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
 }
 
@@ -234,30 +272,31 @@
 }
 
 .groupLabel small {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 8px;
   opacity: 0.42;
 }
 
 .toolIcon {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .slotGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(145px, 185px));
+  justify-content: start;
+  gap: 7px;
 }
 
 .slot {
-  min-height: 120px;
-  padding: 10px;
+  min-height: 70px;
+  padding: 8px;
   border: 1px dashed rgba(255, 255, 255, 0.14);
-  border-radius: 11px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.018);
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -275,34 +314,34 @@
 .slotHeader {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .slotName {
   font-size: 10px;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .fileName {
-  margin-top: 4px;
+  margin-top: 2px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 7px;
-  line-height: 1.35;
-  opacity: 0.36;
+  font-size: 6.5px;
+  line-height: 1.22;
+  opacity: 0.3;
   overflow-wrap: anywhere;
 }
 
 .smallSlotIcon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
 .sharedBadge {
   display: inline-block;
-  margin-top: 6px;
-  padding: 3px 6px;
+  margin-top: 4px;
+  padding: 2px 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   font-size: 7px;
@@ -310,42 +349,61 @@
 }
 
 .emptySlot {
-  min-height: 46px;
-  margin-top: 9px;
+  width: 54%;
+  min-width: 74px;
+  min-height: 28px;
+  margin-top: 5px;
+  margin-left: auto;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 7px;
   background: rgba(255, 255, 255, 0.025);
-  font-size: 9px;
-  opacity: 0.32;
+  font-size: 8px;
+  opacity: 0.34;
 }
 
 .assignedTrack {
-  margin-top: 9px;
-  padding: 8px;
-  border-radius: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  margin-top: 5px;
+  padding: 6px 7px;
+  border-radius: 7px;
   background: rgba(255, 255, 255, 0.055);
 }
 
+.assignedTitleRow {
+  align-items: center;
+}
+
 .assignedTitle {
-  font-size: 10px;
+  min-width: 0;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .assignedActions {
   display: flex;
-  gap: 6px;
-  margin-top: 7px;
+  flex: 0 0 auto;
+  gap: 4px;
+  margin-top: 0;
 }
 
 .assignedActions button {
-  padding: 4px 7px;
+  padding: 4px 6px;
   font-size: 8px;
 }
 
 .warning {
-  margin-top: 6px;
+  grid-column: 1 / -1;
+  margin-top: -1px;
   color: #ffbb70;
   font-size: 8px;
 }
@@ -353,6 +411,15 @@
 @media (max-width: 1150px) {
   .topGrid {
     grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .workspace {
+    width: 100%;
+  }
+
+  .group {
+    width: 100%;
   }
 
   .libraryPanel {
@@ -365,7 +432,8 @@
   }
 
   .slotGrid {
-    grid-template-columns: repeat(2, minmax(145px, 1fr));
+    grid-template-columns: repeat(2, minmax(145px, 185px));
+    justify-content: start;
   }
 }
 

@@ -10,6 +10,7 @@ type PackTrack = {
   title_en: string;
   category: string;
   tags: string;
+  loop_type: string;
   brstm_url: string;
   preview_url: string;
   brstm_lap3_url: string;
@@ -200,6 +201,10 @@ function lap3OutputName(normal: string) {
 
 function displayTrackTitle(track: PackTrack, language: "ja" | "en") {
   return language === "en" ? track.title_en || track.title : track.title;
+}
+
+function hasLoop(track: PackTrack) {
+  return track.loop_type === "loop" || track.loop_type === "perfect_loop";
 }
 
 export default function PackCreator({
@@ -495,8 +500,20 @@ export default function PackCreator({
 
         {track ? (
           <div className={styles.assignedTrack}>
-            <div className={styles.assignedTitle}>
-              {displayTrackTitle(track, language)}
+            <div className={styles.assignedTitleRow}>
+              <span
+                className={`${styles.loopIcon} ${
+                  hasLoop(track) ? styles.loopOn : styles.loopOff
+                }`}
+                title={hasLoop(track) ? "Loop" : "No Loop"}
+                aria-label={hasLoop(track) ? "Loop" : "No Loop"}
+              >
+                ↻
+              </span>
+
+              <div className={styles.assignedTitle}>
+                {displayTrackTitle(track, language)}
+              </div>
             </div>
 
             <div className={styles.assignedActions}>
@@ -508,8 +525,7 @@ export default function PackCreator({
                     onPreview(track, track.preview_url, `pack-${slot.id}`);
                   }}
                 >
-                  {playingKey === `${track.id}-pack-${slot.id}` ? "■" : "▶"}{" "}
-                  {language === "ja" ? "試聴" : "Preview"}
+                  {playingKey === `${track.id}-pack-${slot.id}` ? "■" : "▶"}
                 </button>
               )}
 
@@ -594,9 +610,22 @@ export default function PackCreator({
                 onClick={() => setSelectedTrackId(track.id)}
               >
                 <div>
-                  <div className={styles.paletteTitle}>
-                    {displayTrackTitle(track, language)}
+                  <div className={styles.paletteTitleRow}>
+                    <span
+                      className={`${styles.loopIcon} ${
+                        hasLoop(track) ? styles.loopOn : styles.loopOff
+                      }`}
+                      title={hasLoop(track) ? "Loop" : "No Loop"}
+                      aria-label={hasLoop(track) ? "Loop" : "No Loop"}
+                    >
+                      ↻
+                    </span>
+
+                    <div className={styles.paletteTitle}>
+                      {displayTrackTitle(track, language)}
+                    </div>
                   </div>
+
                   <div className={styles.paletteMeta}>
                     {track.category}
                     {track.brstm_lap3_url

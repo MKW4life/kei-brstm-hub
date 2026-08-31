@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
 import PackCreator from "@/components/PackCreator";
+import VolumeControl from "@/components/VolumeControl";
 
 type Track = {
   id: number;
@@ -106,6 +107,10 @@ function getLoopValue(loopType: string) {
   return loopType === "loop" || loopType === "perfect_loop" ? "Loop" : "No";
 }
 
+function hasLoop(loopType: string) {
+  return loopType === "loop" || loopType === "perfect_loop";
+}
+
 function getYouTubeEmbedUrl(url: string) {
   if (!url) return "";
 
@@ -151,7 +156,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(0.25);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const t = translations[language];
@@ -164,7 +169,7 @@ export default function Home() {
     if (savedVolume !== null) {
       const parsed = Number(savedVolume);
       if (!Number.isNaN(parsed)) {
-        setVolume(Math.min(1, Math.max(0, parsed)));
+        setVolume(Math.min(0.5, Math.max(0, parsed)));
       }
     }
   }, []);
@@ -467,14 +472,25 @@ export default function Home() {
 
   return (
     <div className="page">
-      <KeiProjectRail volume={volume} onVolumeChange={setVolume} />
+      <KeiProjectRail />
 
       <header className="header">
         <div className="headerInner">
-          <Link className="logoArea linkLogo" href="/">
-            <div className="logo">♫</div>
-            <span>Kei BRSTM Hub</span>
-          </Link>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              minWidth: 0,
+            }}
+          >
+            <Link className="logoArea linkLogo" href="/">
+              <div className="logo">♫</div>
+              <span>Kei BRSTM Hub</span>
+            </Link>
+
+            <VolumeControl volume={volume} onVolumeChange={setVolume} />
+          </div>
 
           <div className="headerButtons">
             <button
@@ -637,7 +653,32 @@ export default function Home() {
                       <div className="trackTitleRow">
                         <h3>{getDisplayTitle(track)}</h3>
                         <span className="tag">{track.category}</span>
-                        <span className="tag">{getLoopValue(track.loop_type)}</span>
+                        <span
+                          aria-label={hasLoop(track.loop_type) ? "Loop" : "No Loop"}
+                          title={hasLoop(track.loop_type) ? "Loop" : "No Loop"}
+                          style={{
+                            width: "22px",
+                            height: "22px",
+                            display: "inline-grid",
+                            placeItems: "center",
+                            borderRadius: "999px",
+                            border: hasLoop(track.loop_type)
+                              ? "1px solid rgba(110, 231, 183, 0.68)"
+                              : "1px solid rgba(255, 255, 255, 0.14)",
+                            background: hasLoop(track.loop_type)
+                              ? "rgba(110, 231, 183, 0.12)"
+                              : "transparent",
+                            color: hasLoop(track.loop_type)
+                              ? "rgb(110, 231, 183)"
+                              : "rgba(255, 255, 255, 0.22)",
+                            fontSize: "14px",
+                            fontWeight: 800,
+                            lineHeight: 1,
+                            flex: "0 0 auto",
+                          }}
+                        >
+                          ↻
+                        </span>
                       </div>
 
                       {language === "en" &&
