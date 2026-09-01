@@ -226,6 +226,7 @@ export default function PackCreator({
 }) {
   const [assignments, setAssignments] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
+  const [loopOnly, setLoopOnly] = useState(false);
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [progress, setProgress] = useState("");
@@ -240,6 +241,7 @@ export default function PackCreator({
     const keyword = query.trim().toLowerCase();
 
     return tracks
+      .filter((track) => !loopOnly || hasLoop(track))
       .filter((track) =>
         [
           track.title,
@@ -256,7 +258,7 @@ export default function PackCreator({
           displayTrackTitle(b, language)
         )
       );
-  }, [tracks, query, language]);
+  }, [tracks, query, loopOnly, language]);
 
   const assignedKeys = Object.keys(assignments).filter(
     (key) => assignments[key] != null
@@ -568,7 +570,10 @@ export default function PackCreator({
               <div className={styles.eyebrow}>PACK CREATOR</div>
               <h2>{language === "ja" ? "曲を選ぶ" : "Choose tracks"}</h2>
             </div>
-            <span>{tracks.length}</span>
+            <span>
+              {filteredTracks.length}
+              {filteredTracks.length !== tracks.length ? ` / ${tracks.length}` : ""}
+            </span>
           </div>
 
           <input
@@ -582,6 +587,29 @@ export default function PackCreator({
                 : "Search title or tags"
             }
           />
+
+          <button
+            type="button"
+            aria-pressed={loopOnly}
+            onClick={() => setLoopOnly((current) => !current)}
+            style={{
+              width: "100%",
+              marginTop: "8px",
+              minHeight: "36px",
+              borderRadius: "9px",
+              border: loopOnly
+                ? "1px solid rgba(87,217,140,0.62)"
+                : "1px solid rgba(255,255,255,0.10)",
+              background: loopOnly
+                ? "rgba(87,217,140,0.10)"
+                : "rgba(255,255,255,0.025)",
+              color: loopOnly ? "#57d98c" : "inherit",
+              fontWeight: 750,
+              cursor: "pointer",
+            }}
+          >
+            ↻ {language === "ja" ? "Loopのみ表示" : "Loop only"}
+          </button>
 
           <p className={styles.help}>
             {language === "ja"

@@ -56,7 +56,7 @@ type BulkGroup = {
   loopType: "loop" | "no";
   isPublished: boolean;
   files: BulkGroupFile[];
-  status: "ready" | "uploading" | "done" | "error";
+  status: "ready" | "uploading" | "done" | "error" | "skipped";
 };
 
 type DuplicateMatch = {
@@ -74,8 +74,8 @@ type DuplicateReviewItem = {
 
 const categories = ["コースBGM", "その他BGM"];
 const loopTypes = [
-  { value: "loop", label: "Loop" },
   { value: "no", label: "No" },
+  { value: "loop", label: "Loop" },
 ];
 
 function safeFileName(fileName: string) {
@@ -313,7 +313,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         titleEn: "",
         category: "コースBGM",
         tags: "",
-        loopType: "loop",
+        loopType: "no",
         isPublished: true,
         files: [],
         status: "ready",
@@ -371,7 +371,7 @@ export default function AdminPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editTitleEn, setEditTitleEn] = useState("");
   const [editCategory, setEditCategory] = useState("コースBGM");
-  const [editLoopType, setEditLoopType] = useState<"loop" | "no">("loop");
+  const [editLoopType, setEditLoopType] = useState<"loop" | "no">("no");
   const [editTags, setEditTags] = useState("");
   const [editIsPublished, setEditIsPublished] = useState(true);
 
@@ -392,6 +392,12 @@ export default function AdminPage() {
   const adminAudioRef = useRef<HTMLAudioElement | null>(null);
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReviewItem[]>([]);
   const [showDuplicateReview, setShowDuplicateReview] = useState(false);
+  const [duplicateSkippedGroupKeys, setDuplicateSkippedGroupKeys] = useState<string[]>([]);
+  const [adminTrackQuery, setAdminTrackQuery] = useState("");
+  const [bulkTagName, setBulkTagName] = useState("");
+  const [bulkTagTrackQuery, setBulkTagTrackQuery] = useState("");
+  const [bulkTagSelectedTrackIds, setBulkTagSelectedTrackIds] = useState<number[]>([]);
+  const [bulkTagApplying, setBulkTagApplying] = useState(false);
 
   const tagSuggestions = useMemo(() => {
     const allTags = [
@@ -446,6 +452,53 @@ export default function AdminPage() {
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
       .map((item) => item.label);
   }, [tracks, packs]);
+
+  const adminTrackMatches = useMemo(() => {
+    const keyword = adminTrackQuery
+      .trim()
+      .toLowerCase()
+      .replace(/^#/, "");
+
+    if (!keyword) return tracks;
+
+    return tracks.filter((track) =>
+      [
+        track.title,
+        track.title_en,
+        track.category,
+        track.tags,
+        getLoopValue(track.loop_type),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword)
+    );
+  }, [tracks, adminTrackQuery]);
+
+  const visibleAdminTracks = adminTrackQuery.trim()
+    ? adminTrackMatches.slice(0, 50)
+    : tracks.slice(0, 8);
+
+  const bulkTagTrackMatches = useMemo(() => {
+    const keyword = bulkTagTrackQuery
+      .trim()
+      .toLowerCase()
+      .replace(/^#/, "");
+
+    if (!keyword) return [];
+
+    return tracks.filter((track) =>
+      [
+        track.title,
+        track.title_en,
+        track.category,
+        track.tags,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword)
+    );
+  }, [tracks, bulkTagTrackQuery]);
 
   useEffect(() => {
     async function checkLogin() {
@@ -715,6 +768,8 @@ export default function AdminPage() {
 
     const groups = buildBulkGroups(Array.from(files));
     setBulkGroups(groups);
+    setDuplicateSkippedGroupKeys([]);
+    setShowDuplicateReview(false);
 
     if (groups.length === 0) {
       setMessage("BRSTMまたはMP3ファイルを選択してください。");
@@ -943,6 +998,86 @@ export default function AdminPage() {
     }
   }
 
+  function toggleBulkTagTrackSelection(trackId: number) {
+    setBulkTagSelectedTrackIds((current) =>
+      current.includes(trackId)
+        ? current.filter((id) => id !== trackId)
+        : [...current, trackId]
+    );
+  }
+
+  function selectAllBulkTagMatches() {
+    setBulkTagSelectedTrackIds((current) => {
+      const next = new Set(current);
+      bulkTagTrackMatches.forEach((track) => next.add(track.id));
+      return Array.from(next);
+    });
+  }
+
+  async function handleBulkAddTag() {
+    const tag = bulkTagName.trim().replace(/^#/, "");
+
+    if (!tag) {
+      setMessage("一括付与するタグ名を入力してください。");
+      return;
+    }
+
+    if (bulkTagSelectedTrackIds.length === 0) {
+      setMessage("タグを追加する曲を選択してください。");
+      return;
+    }
+
+    const selectedTracks = tracks.filter((track) =>
+      bulkTagSelectedTrackIds.includes(track.id)
+    );
+
+    setBulkTagApplying(true);
+    setMessage(`#${tag} を ${selectedTracks.length}曲に追加中...`);
+
+    try {
+      const results = await Promise.all(
+        selectedTracks.map(async (track) => {
+          const existingTags = splitTagList(track.tags);
+
+          if (
+            existingTags.some(
+              (existingTag) =>
+                existingTag.toLowerCase() === tag.toLowerCase()
+            )
+          ) {
+            return false;
+          }
+
+          const nextTags = [...existingTags, tag].join(", ");
+
+          const { error } = await supabase
+            .from("tracks")
+            .update({ tags: nextTags })
+            .eq("id", track.id);
+
+          if (error) throw error;
+          return true;
+        })
+      );
+
+      const changedCount = results.filter(Boolean).length;
+
+      setMessage(
+        `#${tag} を ${changedCount}曲に追加しました。` +
+          (changedCount < selectedTracks.length
+            ? ` ${selectedTracks.length - changedCount}曲は既に付いていました。`
+            : "")
+      );
+      setBulkTagSelectedTrackIds([]);
+      await loadTracks();
+    } catch (error) {
+      console.error(error);
+      setMessage("タグの一括付与に失敗しました。");
+    } finally {
+      setBulkTagApplying(false);
+    }
+  }
+
   function addSuggestedTagToGroup(key: string, tag: string) {
     setBulkGroups((current) =>
       current.map((group) => {
@@ -1026,18 +1161,34 @@ export default function AdminPage() {
     return reviewItems;
   }
 
-  async function executeBulkUpload() {
-    const validGroups = bulkGroups.filter((group) =>
-      group.files.some((item) => item.role === "normalBrstm")
+  async function executeBulkUpload(
+    skippedGroupKeys: Set<string> = new Set()
+  ) {
+    skippedGroupKeys.forEach((key) =>
+      updateBulkGroup(key, { status: "skipped" })
+    );
+
+    const validGroups = bulkGroups.filter(
+      (group) =>
+        !skippedGroupKeys.has(group.key) &&
+        group.files.some((item) => item.role === "normalBrstm")
     );
 
     if (validGroups.length === 0) {
-      setMessage("通常用BRSTMがある曲がありません。");
+      setMessage(
+        skippedGroupKeys.size > 0
+          ? "重複候補をすべて「アップロードしない」にしました。"
+          : "通常用BRSTMがある曲がありません。"
+      );
       return;
     }
 
     setBulkUploading(true);
-    setMessage("一括アップロードを開始しました。");
+    setMessage(
+      skippedGroupKeys.size > 0
+        ? `${skippedGroupKeys.size}曲を除外して一括アップロードを開始しました。`
+        : "一括アップロードを開始しました。"
+    );
 
     let successCount = 0;
     let errorCount = 0;
@@ -1100,7 +1251,7 @@ export default function AdminPage() {
 
     setBulkUploading(false);
     setMessage(
-      `一括登録完了: ${successCount}曲 / エラー: ${errorCount}曲。`
+      `一括登録完了: ${successCount}曲 / 除外: ${skippedGroupKeys.size}曲 / エラー: ${errorCount}曲。`
     );
     await loadTracks();
   }
@@ -1121,6 +1272,7 @@ export default function AdminPage() {
 
     if (duplicates.length > 0) {
       setDuplicateReview(duplicates);
+      setDuplicateSkippedGroupKeys([]);
       setShowDuplicateReview(true);
       return;
     }
@@ -1129,8 +1281,9 @@ export default function AdminPage() {
   }
 
   async function handleConfirmDuplicateUpload() {
+    const skipped = new Set<string>(duplicateSkippedGroupKeys);
     setShowDuplicateReview(false);
-    await executeBulkUpload();
+    await executeBulkUpload(skipped);
   }
 
   async function handlePackSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1752,8 +1905,43 @@ export default function AdminPage() {
         <section className="adminPanel wide">
           <h2 className="adminSubTitle">登録済みの曲</h2>
 
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: "10px",
+              alignItems: "center",
+              marginBottom: "10px",
+            }}
+          >
+            <input
+              className="formInput"
+              value={adminTrackQuery}
+              onChange={(event) => setAdminTrackQuery(event.target.value)}
+              placeholder="曲名・英語名・タグ・カテゴリで検索"
+            />
+
+            {adminTrackQuery && (
+              <button
+                className="secondaryButton"
+                type="button"
+                onClick={() => setAdminTrackQuery("")}
+              >
+                クリア
+              </button>
+            )}
+          </div>
+
+          <p className="formMessage" style={{ marginBottom: "14px" }}>
+            {adminTrackQuery.trim()
+              ? `${adminTrackMatches.length}件ヒット${
+                  adminTrackMatches.length > 50 ? "（先頭50件を表示）" : ""
+                }`
+              : `全${tracks.length}曲のうち、最近登録した8曲だけ表示しています。過去の曲は検索してください。`}
+          </p>
+
           <div className="adminTrackList">
-            {tracks.map((track) => (
+            {visibleAdminTracks.map((track) => (
               <article className="adminTrackCard" key={track.id}>
                 {editingTrackId === track.id ? (
                   <form className="adminForm" onSubmit={handleEditSubmit}>
@@ -1985,8 +2173,12 @@ export default function AdminPage() {
               </article>
             ))}
 
-            {tracks.length === 0 && (
-              <div className="empty">登録済みの曲はありません。</div>
+            {visibleAdminTracks.length === 0 && (
+              <div className="empty">
+                {adminTrackQuery.trim()
+                  ? "条件に一致する登録済み曲はありません。"
+                  : "登録済みの曲はありません。"}
+              </div>
             )}
           </div>
         </section>
@@ -1998,6 +2190,163 @@ export default function AdminPage() {
           <p className="formMessage">
             タグ名の変更・削除は、そのタグを使っているすべての曲とMusic Packに反映されます。
           </p>
+
+          <div
+            style={{
+              margin: "18px 0 24px",
+              padding: "16px",
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: "14px",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 6px" }}>タグを複数曲へ一括追加</h3>
+            <p className="formMessage" style={{ marginBottom: "12px" }}>
+              後から作ったタグも、曲名・英語名・既存タグで対象曲を検索してまとめて付けられます。
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(220px, 0.7fr) minmax(280px, 1fr)",
+                gap: "10px",
+              }}
+            >
+              <label className="formLabel">
+                追加するタグ
+                <input
+                  className="formInput"
+                  value={bulkTagName}
+                  onChange={(event) => setBulkTagName(event.target.value)}
+                  placeholder="例: Pokémon"
+                />
+              </label>
+
+              <label className="formLabel">
+                対象曲を検索
+                <input
+                  className="formInput"
+                  value={bulkTagTrackQuery}
+                  onChange={(event) => {
+                    setBulkTagTrackQuery(event.target.value);
+                    setBulkTagSelectedTrackIds([]);
+                  }}
+                  placeholder="曲名・英語名・既存タグ・カテゴリ"
+                />
+              </label>
+            </div>
+
+            {bulkTagTrackQuery.trim() ? (
+              <>
+                <div
+                  className="adminActions"
+                  style={{
+                    justifyContent: "flex-start",
+                    margin: "12px 0 8px",
+                  }}
+                >
+                  <button
+                    className="secondaryButton"
+                    type="button"
+                    onClick={selectAllBulkTagMatches}
+                    disabled={bulkTagTrackMatches.length === 0}
+                  >
+                    検索結果{bulkTagTrackMatches.length}件を全選択
+                  </button>
+
+                  <button
+                    className="secondaryButton"
+                    type="button"
+                    onClick={() => setBulkTagSelectedTrackIds([])}
+                    disabled={bulkTagSelectedTrackIds.length === 0}
+                  >
+                    選択解除
+                  </button>
+
+                  <span className="formMessage">
+                    {bulkTagSelectedTrackIds.length}曲選択中
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "6px",
+                    maxHeight: "280px",
+                    overflowY: "auto",
+                    paddingRight: "4px",
+                  }}
+                >
+                  {bulkTagTrackMatches.map((track) => (
+                    <label
+                      key={`bulk-tag-${track.id}`}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "auto minmax(0, 1fr)",
+                        gap: "10px",
+                        alignItems: "center",
+                        padding: "9px 10px",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: "10px",
+                        background: bulkTagSelectedTrackIds.includes(track.id)
+                          ? "rgba(255,255,255,0.06)"
+                          : "rgba(255,255,255,0.015)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={bulkTagSelectedTrackIds.includes(track.id)}
+                        onChange={() => toggleBulkTagTrackSelection(track.id)}
+                      />
+                      <span style={{ minWidth: 0 }}>
+                        <strong>{track.title}</strong>
+                        {track.title_en && track.title_en !== track.title
+                          ? ` / ${track.title_en}`
+                          : ""}
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: "2px",
+                            fontSize: "11px",
+                            opacity: 0.55,
+                          }}
+                        >
+                          {track.tags || "タグなし"}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+
+                  {bulkTagTrackMatches.length === 0 && (
+                    <div className="empty">
+                      条件に一致する曲はありません。
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  className="primaryButton fullButton"
+                  type="button"
+                  style={{ marginTop: "12px" }}
+                  onClick={handleBulkAddTag}
+                  disabled={
+                    bulkTagApplying ||
+                    bulkTagSelectedTrackIds.length === 0 ||
+                    !bulkTagName.trim()
+                  }
+                >
+                  {bulkTagApplying
+                    ? "タグを追加中..."
+                    : `選択した${bulkTagSelectedTrackIds.length}曲にタグを追加`}
+                </button>
+              </>
+            ) : (
+              <p className="formMessage" style={{ marginTop: "12px" }}>
+                対象曲を検索すると選択リストが表示されます。
+              </p>
+            )}
+          </div>
 
           {tagSuggestions.length === 0 ? (
             <div className="empty">現在登録されているタグはありません。</div>
@@ -2092,7 +2441,7 @@ export default function AdminPage() {
             <p className="label">DUPLICATE CHECK</p>
             <h2 className="adminSubTitle">似たタイトルの公開曲があります</h2>
             <p className="formMessage">
-              重複登録の可能性があります。内容を確認して、このまま登録するか選んでください。
+              重複登録の可能性があります。不要な曲はこの画面で「アップロードしない」を選べます。
             </p>
 
             <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
@@ -2134,6 +2483,37 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
+
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "9px",
+                      marginTop: "10px",
+                      padding: "9px 10px",
+                      borderRadius: "9px",
+                      border: duplicateSkippedGroupKeys.includes(item.groupKey)
+                        ? "1px solid rgba(248,113,113,0.52)"
+                        : "1px solid rgba(255,255,255,0.09)",
+                      background: duplicateSkippedGroupKeys.includes(item.groupKey)
+                        ? "rgba(248,113,113,0.08)"
+                        : "rgba(255,255,255,0.02)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={duplicateSkippedGroupKeys.includes(item.groupKey)}
+                      onChange={(event) =>
+                        setDuplicateSkippedGroupKeys((current) =>
+                          event.target.checked
+                            ? [...current, item.groupKey]
+                            : current.filter((key) => key !== item.groupKey)
+                        )
+                      }
+                    />
+                    この曲はアップロードしない
+                  </label>
                 </div>
               ))}
             </div>
@@ -2155,7 +2535,9 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleConfirmDuplicateUpload}
               >
-                このまま登録する
+                {duplicateSkippedGroupKeys.length > 0
+                  ? `${duplicateSkippedGroupKeys.length}曲を除外して登録`
+                  : "このまま登録する"}
               </button>
             </div>
           </div>
