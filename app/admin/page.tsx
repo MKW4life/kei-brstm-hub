@@ -588,27 +588,125 @@ export default function AdminPage() {
     setPacks((data as MusicPack[]) ?? []);
   }
 
+  async function getAdminAccessToken() {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session?.access_token) {
+      throw new Error("管理者セッションを取得できませんでした。再ログインしてください。");
+    }
+
+    return session.access_token;
+  }
+
+  function getR2ObjectKey(bucket: string, publicUrl: string) {
+    if (!publicUrl) return null;
+
+    try {
+      const parsed = new URL(publicUrl);
+      const key = decodeURIComponent(parsed.pathname).replace(/^\/+/, "");
+
+      if (!key.startsWith(`${bucket}/`)) return null;
+      return key;
+    } catch {
+      return null;
+    }
+  }
+
   async function uploadFile(bucket: string, file: File) {
     const filePath = safeFileName(file.name);
+    const key = `${bucket}/${filePath}`;
+    const contentType =
+      file.type ||
+      (file.name.toLowerCase().endsWith(".mp3")
+        ? "audio/mpeg"
+        : "application/octet-stream");
 
-    const { error } = await supabase.storage.from(bucket).upload(filePath, file, {
-      upsert: false,
+    const accessToken = await getAdminAccessToken();
+
+    const signResponse = await fetch("/api/r2/upload-url", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        key,
+        contentType,
+      }),
     });
 
-    if (error) throw error;
+    const signData = await signResponse.json().catch(() => null);
 
-    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    return data.publicUrl;
+    if (!signResponse.ok || !signData?.uploadUrl || !signData?.publicUrl) {
+      throw new Error(
+        signData?.error || "R2アップロードURLの発行に失敗しました。"
+      );
+    }
+
+    const uploadResponse = await fetch(signData.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": contentType,
+      },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(
+        `R2へのアップロードに失敗しました (${uploadResponse.status})`
+      );
+    }
+
+    return signData.publicUrl as string;
   }
 
   async function removeStorageFile(bucket: string, publicUrl: string) {
+    if (!publicUrl) return;
+
+    // New files: Cloudflare R2
+    const r2Key = getR2ObjectKey(bucket, publicUrl);
+
+    if (r2Key) {
+      try {
+        const accessToken = await getAdminAccessToken();
+
+        const response = await fetch("/api/r2/delete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ key: r2Key }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          console.warn(
+            `R2 file delete failed: ${r2Key}`,
+            data?.error || response.status
+          );
+        }
+      } catch (error) {
+        console.warn(`R2 file delete failed: ${r2Key}`, error);
+      }
+
+      return;
+    }
+
+    // Legacy fallback: files that still point at Supabase Storage.
     const filePath = getStoragePathFromPublicUrl(bucket, publicUrl);
     if (!filePath) return;
 
     const { error } = await supabase.storage.from(bucket).remove([filePath]);
 
     if (error) {
-      console.warn(`Storage file delete failed: ${bucket}/${filePath}`, error);
+      console.warn(
+        `Legacy Supabase Storage file delete failed: ${bucket}/${filePath}`,
+        error
+      );
     }
   }
 
