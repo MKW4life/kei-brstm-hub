@@ -46,7 +46,9 @@ const translations = {
     packCreator: "Pack作成",
     newest: "新着順",
     name: "曲名順",
-    downloads: "ダウンロード数順",
+    ascending: "昇順",
+    descending: "降順",
+    loopOnly: "Loopのみ",
     random: "ランダム選曲",
     clearRandom: "ランダム解除",
     published: "公開中のBRSTM",
@@ -77,7 +79,9 @@ const translations = {
     packCreator: "Pack Creator",
     newest: "Newest",
     name: "Title A-Z",
-    downloads: "Most Downloaded",
+    ascending: "Ascending",
+    descending: "Descending",
+    loopOnly: "Loop only",
     random: "Random Pick",
     clearRandom: "Clear Random",
     published: "Available BRSTMs",
@@ -149,7 +153,9 @@ export default function Home() {
   const [language, setLanguage] = useState<"ja" | "en">("ja");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("すべて");
-  const [sort, setSort] = useState("newest");
+  const [sort, setSort] = useState<"newest" | "name">("newest");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [loopOnly, setLoopOnly] = useState(false);
   const [randomTrackId, setRandomTrackId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [packs, setPacks] = useState<MusicPack[]>([]);
@@ -256,8 +262,11 @@ export default function Home() {
   const filteredTracks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
+    const direction = sortDirection === "asc" ? 1 : -1;
+
     return [...tracks]
       .filter((track) => category === "すべて" || track.category === category)
+      .filter((track) => !loopOnly || hasLoop(track.loop_type))
       .filter((track) => {
         const searchableText = [
           track.title,
@@ -275,13 +284,20 @@ export default function Home() {
         if (sort === "name") {
           const titleA = language === "en" ? a.title_en || a.title : a.title;
           const titleB = language === "en" ? b.title_en || b.title : b.title;
-          return titleA.localeCompare(titleB);
+          return titleA.localeCompare(titleB) * direction;
         }
 
-        if (sort === "downloads") return b.download_count - a.download_count;
-        return b.created_at.localeCompare(a.created_at);
+        return a.created_at.localeCompare(b.created_at) * direction;
       });
-  }, [tracks, query, category, sort, language]);
+  }, [
+    tracks,
+    query,
+    category,
+    sort,
+    sortDirection,
+    loopOnly,
+    language,
+  ]);
 
   const visibleTracks = useMemo(() => {
     if (randomTrackId === null) return filteredTracks;
@@ -290,16 +306,20 @@ export default function Home() {
 
   const visiblePacks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
+    const direction = sortDirection === "asc" ? 1 : -1;
 
     return [...packs]
       .filter((pack) =>
         [pack.title, pack.tags].join(" ").toLowerCase().includes(keyword)
       )
       .sort((a, b) => {
-        if (sort === "name") return a.title.localeCompare(b.title);
-        return b.created_at.localeCompare(a.created_at);
+        if (sort === "name") {
+          return a.title.localeCompare(b.title) * direction;
+        }
+
+        return a.created_at.localeCompare(b.created_at) * direction;
       });
-  }, [packs, query, sort]);
+  }, [packs, query, sort, sortDirection]);
 
   const categories = [
     { value: "すべて" as CategoryFilter, label: t.all },
@@ -554,7 +574,7 @@ export default function Home() {
           }
         >
           {!isPackCreatorView && (
-            <div className="controlTop">
+            <div className="controlTop" style={{ flexWrap: "wrap" }}>
               <input
                 className="search"
                 type="text"
@@ -570,15 +590,53 @@ export default function Home() {
                 className="sort"
                 value={sort}
                 onChange={(event) => {
-                  setSort(event.target.value);
+                  const nextSort = event.target.value as "newest" | "name";
+                  setSort(nextSort);
+                  setSortDirection(nextSort === "name" ? "asc" : "desc");
                   setRandomTrackId(null);
                 }}
                 aria-label={t.newest}
               >
                 <option value="newest">{t.newest}</option>
                 <option value="name">{t.name}</option>
-                <option value="downloads">{t.downloads}</option>
               </select>
+
+              <select
+                className="sort"
+                style={{ minWidth: "120px" }}
+                value={sortDirection}
+                onChange={(event) => {
+                  setSortDirection(event.target.value as "asc" | "desc");
+                  setRandomTrackId(null);
+                }}
+                aria-label={sortDirection === "asc" ? t.ascending : t.descending}
+              >
+                <option value="asc">{t.ascending}</option>
+                <option value="desc">{t.descending}</option>
+              </select>
+
+              {!isPackView && (
+                <button
+                  className="secondaryButton"
+                  type="button"
+                  aria-pressed={loopOnly}
+                  onClick={() => {
+                    setLoopOnly((current) => !current);
+                    setRandomTrackId(null);
+                  }}
+                  style={
+                    loopOnly
+                      ? {
+                          background: "#ffffff",
+                          color: "#09090b",
+                          borderColor: "#ffffff",
+                        }
+                      : undefined
+                  }
+                >
+                  ↻ {t.loopOnly}
+                </button>
+              )}
 
               {!isPackView &&
                 (randomTrackId === null ? (
