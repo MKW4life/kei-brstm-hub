@@ -281,6 +281,25 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
       }
     }
 
+    // Also handle names where the Lap 3 marker is attached directly
+    // to the very end with no separator.
+    //
+    // Example:
+    // t+pazolite Oshama Scramble! (Uncut Edition)
+    // t+pazolite Oshama Scramble! (Uncut Edition)3
+    //
+    // As with standalone "3", this is treated as Lap 3 ONLY when
+    // removing the final 3 produces another selected filename.
+    if (item.stem.endsWith("3")) {
+      const attachedTrailingThreeCandidate = cleanBaseName(
+        item.stem.slice(0, -1)
+      );
+
+      if (attachedTrailingThreeCandidate) {
+        candidates.push(attachedTrailingThreeCandidate);
+      }
+    }
+
     const matchingCandidate = candidates.find((candidate) =>
       knownNames.has(normalizeCompareName(candidate))
     );
