@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
 import AdminTagPicker from "@/components/AdminTagPicker";
+import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 
 type Track = {
   id: number;
@@ -70,6 +71,11 @@ type DuplicateReviewItem = {
   groupKey: string;
   incomingTitle: string;
   matches: DuplicateMatch[];
+};
+
+type TagDefinition = {
+  name: string;
+  name_en: string;
 };
 
 const categories = ["コースBGM", "その他BGM"];
@@ -331,7 +337,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         title: item.baseName,
         titleEn: "",
         category: "コースBGM",
-        tags: "",
+        tags: "No tag",
         loopType: "no",
         isPublished: true,
         files: [],
@@ -391,7 +397,7 @@ export default function AdminPage() {
   const [editTitleEn, setEditTitleEn] = useState("");
   const [editCategory, setEditCategory] = useState("コースBGM");
   const [editLoopType, setEditLoopType] = useState<"loop" | "no">("no");
-  const [editTags, setEditTags] = useState("");
+  const [editTags, setEditTags] = useState("No tag");
   const [editIsPublished, setEditIsPublished] = useState(true);
 
   const [editBrstmFile, setEditBrstmFile] = useState<File | null>(null);
@@ -401,22 +407,30 @@ export default function AdminPage() {
     useState<File | null>(null);
 
   const [packTitle, setPackTitle] = useState("");
-  const [packTags, setPackTags] = useState("");
+  const [packTags, setPackTags] = useState("No tag");
   const [packYoutubeUrl, setPackYoutubeUrl] = useState("");
   const [packZipUrl, setPackZipUrl] = useState("");
   const [packPublished, setPackPublished] = useState(true);
   const [packSubmitting, setPackSubmitting] = useState(false);
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const [tagEnglishDrafts, setTagEnglishDrafts] = useState<Record<string, string>>({});
+  const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([]);
   const [adminPlayingKey, setAdminPlayingKey] = useState<string | null>(null);
   const adminAudioRef = useRef<HTMLAudioElement | null>(null);
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReviewItem[]>([]);
   const [showDuplicateReview, setShowDuplicateReview] = useState(false);
   const [duplicateSkippedGroupKeys, setDuplicateSkippedGroupKeys] = useState<string[]>([]);
   const [adminTrackQuery, setAdminTrackQuery] = useState("");
+  const [adminTrackTagQuery, setAdminTrackTagQuery] = useState("");
+  const [adminTrackTagMode, setAdminTrackTagMode] = useState<"all" | "any">("all");
   const [bulkTagName, setBulkTagName] = useState("");
   const [bulkTagTrackQuery, setBulkTagTrackQuery] = useState("");
+  const [bulkTagFilterQuery, setBulkTagFilterQuery] = useState("");
+  const [bulkTagFilterMode, setBulkTagFilterMode] = useState<"all" | "any">("all");
   const [bulkTagSelectedTrackIds, setBulkTagSelectedTrackIds] = useState<number[]>([]);
   const [bulkTagApplying, setBulkTagApplying] = useState(false);
+  const [pendingUploadGroupKeys, setPendingUploadGroupKeys] = useState<string[]>([]);
+  const [hideCompletedBulkGroups, setHideCompletedBulkGroups] = useState(true);
 
   const tagSuggestions = useMemo(() => {
     const allTags = [
@@ -448,6 +462,34 @@ export default function AdminPage() {
     );
   }, [tracks, packs]);
 
+  const tagSearchSuggestions = useMemo<TagSuggestion[]>(() => {
+    const definitionMap = new Map(
+      tagDefinitions.map((definition) => [
+        definition.name.toLowerCase(),
+        definition.name_en || "",
+      ])
+    );
+
+    return tagSuggestions.map((name) => ({
+      name,
+      name_en: definitionMap.get(name.toLowerCase()) || "",
+    }));
+  }, [tagSuggestions, tagDefinitions]);
+
+  const tagAliasMap = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const suggestion of tagSearchSuggestions) {
+      const canonical = suggestion.name.toLowerCase();
+      map.set(canonical, canonical);
+
+      const english = suggestion.name_en?.trim().toLowerCase();
+      if (english) map.set(english, canonical);
+    }
+
+    return map;
+  }, [tagSearchSuggestions]);
+
   const tagPickerSuggestions = useMemo(() => {
     const counts = new Map<string, { label: string; count: number }>();
 
@@ -478,23 +520,30 @@ export default function AdminPage() {
       .toLowerCase()
       .replace(/^#/, "");
 
-    if (!keyword) return tracks;
+    return tracks
+      .filter((track) => {
+        if (!keyword) return true;
 
-    return tracks.filter((track) =>
-      [
-        track.title,
-        track.title_en,
-        track.category,
-        track.tags,
-        getLoopValue(track.loop_type),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(keyword)
-    );
-  }, [tracks, adminTrackQuery]);
+        return [
+          track.title,
+          track.title_en,
+          track.category,
+          track.tags,
+          getLoopValue(track.loop_type),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(keyword);
+      })
+      .filter((track) =>
+        matchesTagSearch(track.tags, adminTrackTagQuery, adminTrackTagMode)
+      );
+  }, [tracks, adminTrackQuery, adminTrackTagQuery, adminTrackTagMode, tagAliasMap]);
 
-  const visibleAdminTracks = adminTrackQuery.trim()
+  const hasAdminTrackFilter =
+    Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim());
+
+  const visibleAdminTracks = hasAdminTrackFilter
     ? adminTrackMatches.slice(0, 50)
     : tracks.slice(0, 8);
 
@@ -504,20 +553,43 @@ export default function AdminPage() {
       .toLowerCase()
       .replace(/^#/, "");
 
-    if (!keyword) return [];
+    const hasFilter =
+      Boolean(keyword) || Boolean(bulkTagFilterQuery.trim());
 
-    return tracks.filter((track) =>
-      [
-        track.title,
-        track.title_en,
-        track.category,
-        track.tags,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(keyword)
-    );
-  }, [tracks, bulkTagTrackQuery]);
+    if (!hasFilter) return [];
+
+    return tracks
+      .filter((track) => {
+        if (!keyword) return true;
+
+        return [
+          track.title,
+          track.title_en,
+          track.category,
+          track.tags,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(keyword);
+      })
+      .filter((track) =>
+        matchesTagSearch(track.tags, bulkTagFilterQuery, bulkTagFilterMode)
+      );
+  }, [
+    tracks,
+    bulkTagTrackQuery,
+    bulkTagFilterQuery,
+    bulkTagFilterMode,
+    tagAliasMap,
+  ]);
+
+  const completedBulkGroupCount = bulkGroups.filter(
+    (group) => group.status === "done"
+  ).length;
+
+  const visibleBulkGroups = hideCompletedBulkGroups
+    ? bulkGroups.filter((group) => group.status !== "done")
+    : bulkGroups;
 
   useEffect(() => {
     async function checkLogin() {
@@ -529,7 +601,7 @@ export default function AdminPage() {
       }
 
       setChecking(false);
-      await Promise.all([loadTracks(), loadPacks()]);
+      await Promise.all([loadTracks(), loadPacks(), loadTagDefinitions()]);
     }
 
     checkLogin();
@@ -633,7 +705,28 @@ export default function AdminPage() {
       return;
     }
 
-    setTracks((data as Track[]) ?? []);
+    const rawTracks = (data as Track[]) ?? [];
+    const loadedTracks = rawTracks.map((track) => ({
+      ...track,
+      tags: track.tags?.trim() || "No tag",
+    }));
+
+    const blankIds = rawTracks
+      .filter((track) => !track.tags?.trim())
+      .map((track) => track.id);
+
+    setTracks(loadedTracks);
+
+    if (blankIds.length > 0) {
+      const { error: tagError } = await supabase
+        .from("tracks")
+        .update({ tags: "No tag" })
+        .in("id", blankIds);
+
+      if (tagError) {
+        console.warn("No tagの自動付与に失敗しました。", tagError);
+      }
+    }
   }
 
   async function loadPacks() {
@@ -657,7 +750,52 @@ export default function AdminPage() {
       return;
     }
 
-    setPacks((data as MusicPack[]) ?? []);
+    const rawPacks = (data as MusicPack[]) ?? [];
+    const loadedPacks = rawPacks.map((pack) => ({
+      ...pack,
+      tags: pack.tags?.trim() || "No tag",
+    }));
+
+    const blankIds = rawPacks
+      .filter((pack) => !pack.tags?.trim())
+      .map((pack) => pack.id);
+
+    setPacks(loadedPacks);
+
+    if (blankIds.length > 0) {
+      const { error: tagError } = await supabase
+        .from("music_packs")
+        .update({ tags: "No tag" })
+        .in("id", blankIds);
+
+      if (tagError) {
+        console.warn("Music PackへのNo tag自動付与に失敗しました。", tagError);
+      }
+    }
+  }
+
+  async function loadTagDefinitions() {
+    const { data, error } = await supabase
+      .from("tag_definitions")
+      .select("name, name_en")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.warn("タグ英語名を読み込めませんでした。", error);
+      setTagDefinitions([]);
+      return;
+    }
+
+    const definitions = (data as TagDefinition[]) ?? [];
+    setTagDefinitions(definitions);
+    setTagEnglishDrafts(
+      Object.fromEntries(
+        definitions.map((definition) => [
+          definition.name,
+          definition.name_en || "",
+        ])
+      )
+    );
   }
 
   async function getAdminAccessToken() {
@@ -881,11 +1019,112 @@ export default function AdminPage() {
     });
   }
 
+  function splitBulkFile(sourceGroupKey: string, fileId: string) {
+    setBulkGroups((current) => {
+      const source = current.find((group) => group.key === sourceGroupKey);
+      if (!source) return current;
+
+      const selected = source.files.find((item) => item.id === fileId);
+      if (!selected) return current;
+
+      const selectedStem = normalizeCompareName(stripExtension(selected.name));
+      const filesToSplit = source.files.filter(
+        (item) =>
+          normalizeCompareName(stripExtension(item.name)) === selectedStem
+      );
+
+      if (filesToSplit.length === 0) return current;
+
+      const splitIds = new Set(filesToSplit.map((item) => item.id));
+      const splitTitle = cleanBaseName(stripExtension(selected.name));
+      const splitKey = `${normalizeCompareName(splitTitle)}-split-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}`;
+
+      const newGroup: BulkGroup = {
+        key: splitKey,
+        title: splitTitle,
+        titleEn: "",
+        category: source.category,
+        tags: normalizeTagsForSave(source.tags),
+        loopType: "no",
+        isPublished: source.isPublished,
+        files: filesToSplit.map((item) => ({
+          ...item,
+          role:
+            item.extension === "brstm"
+              ? "normalBrstm"
+              : "normalPreview",
+        })),
+        status: "ready",
+      };
+
+      const nextSource: BulkGroup = {
+        ...source,
+        files: source.files.filter((item) => !splitIds.has(item.id)),
+        status: "ready",
+      };
+
+      return [
+        ...current.filter((group) => group.key !== sourceGroupKey),
+        ...(nextSource.files.length > 0 ? [nextSource] : []),
+        newGroup,
+      ].sort((a, b) => a.title.localeCompare(b.title));
+    });
+  }
+
   function splitTagList(value: string) {
     return (value || "")
       .split(",")
-      .map((item) => item.trim())
+      .map((item) => item.trim().replace(/^#/, ""))
       .filter(Boolean);
+  }
+
+  function normalizeTagsForSave(value: string) {
+    const result: string[] = [];
+    const seen = new Set<string>();
+
+    for (const tag of splitTagList(value)) {
+      const normalized = tag.toLowerCase();
+
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        result.push(tag);
+      }
+    }
+
+    const realTags = result.filter((tag) => tag.toLowerCase() !== "no tag");
+    return realTags.length > 0 ? realTags.join(", ") : "No tag";
+  }
+
+  function parseTagSearch(value: string) {
+    const seen = new Set<string>();
+
+    return splitTagList(value)
+      .map((tag) => tag.toLowerCase())
+      .map((tag) => tagAliasMap.get(tag) ?? tag)
+      .filter((tag) => {
+        if (seen.has(tag)) return false;
+        seen.add(tag);
+        return true;
+      });
+  }
+
+  function matchesTagSearch(
+    tagsValue: string,
+    searchValue: string,
+    mode: "all" | "any"
+  ) {
+    const requested = parseTagSearch(searchValue);
+    if (requested.length === 0) return true;
+
+    const trackTags = new Set(
+      splitTagList(tagsValue).map((tag) => tag.toLowerCase())
+    );
+
+    return mode === "all"
+      ? requested.every((tag) => trackTags.has(tag))
+      : requested.some((tag) => trackTags.has(tag));
   }
 
   function buildRenamedTagList(
@@ -916,7 +1155,7 @@ export default function AdminPage() {
       }
     }
 
-    return result.join(", ");
+    return normalizeTagsForSave(result.join(", "));
   }
 
   async function updateTagEverywhere(oldTag: string, newTag: string | null) {
@@ -959,6 +1198,34 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSaveTagEnglish(tag: string) {
+    const nameEn = (tagEnglishDrafts[tag] ?? "").trim();
+
+    try {
+      const { error } = await supabase
+        .from("tag_definitions")
+        .upsert(
+          {
+            name: tag,
+            name_en: nameEn,
+          },
+          { onConflict: "name" }
+        );
+
+      if (error) throw error;
+
+      setMessage(
+        nameEn
+          ? `#${tag} の英語名を「${nameEn}」に保存しました。`
+          : `#${tag} の英語名を空欄にしました。英語表示では日本語名を使用します。`
+      );
+      await loadTagDefinitions();
+    } catch (error) {
+      console.error(error);
+      setMessage("タグ英語名の保存に失敗しました。tag_definitionsテーブルを確認してください。");
+    }
+  }
+
   async function handleRenameTag(oldTag: string) {
     const newTag = (tagDrafts[oldTag] ?? oldTag).trim();
 
@@ -977,14 +1244,41 @@ export default function AdminPage() {
 
       await updateTagEverywhere(oldTag, newTag);
 
+      const currentEnglish =
+        tagEnglishDrafts[oldTag] ??
+        tagDefinitions.find(
+          (definition) => definition.name.toLowerCase() === oldTag.toLowerCase()
+        )?.name_en ??
+        "";
+
+      await supabase.from("tag_definitions").delete().eq("name", oldTag);
+      const { error: definitionError } = await supabase
+        .from("tag_definitions")
+        .upsert(
+          {
+            name: newTag,
+            name_en: currentEnglish.trim(),
+          },
+          { onConflict: "name" }
+        );
+
+      if (definitionError) throw definitionError;
+
       setTagDrafts((current) => {
         const next = { ...current };
         delete next[oldTag];
         return next;
       });
 
+      setTagEnglishDrafts((current) => {
+        const next = { ...current };
+        delete next[oldTag];
+        next[newTag] = currentEnglish;
+        return next;
+      });
+
       setMessage(`#${oldTag} を #${newTag} に変更しました。`);
-      await Promise.all([loadTracks(), loadPacks()]);
+      await Promise.all([loadTracks(), loadPacks(), loadTagDefinitions()]);
     } catch (error) {
       console.error(error);
       setMessage("タグ名の変更に失敗しました。");
@@ -1002,6 +1296,7 @@ export default function AdminPage() {
       setMessage(`#${tag} を削除中...`);
 
       await updateTagEverywhere(tag, null);
+      await supabase.from("tag_definitions").delete().eq("name", tag);
 
       setTagDrafts((current) => {
         const next = { ...current };
@@ -1009,8 +1304,14 @@ export default function AdminPage() {
         return next;
       });
 
+      setTagEnglishDrafts((current) => {
+        const next = { ...current };
+        delete next[tag];
+        return next;
+      });
+
       setMessage(`#${tag} をすべての登録から削除しました。`);
-      await Promise.all([loadTracks(), loadPacks()]);
+      await Promise.all([loadTracks(), loadPacks(), loadTagDefinitions()]);
     } catch (error) {
       console.error(error);
       setMessage("タグの削除に失敗しました。");
@@ -1067,7 +1368,7 @@ export default function AdminPage() {
             return false;
           }
 
-          const nextTags = [...existingTags, tag].join(", ");
+          const nextTags = normalizeTagsForSave([...existingTags, tag].join(", "));
 
           const { error } = await supabase
             .from("tracks")
@@ -1181,7 +1482,8 @@ export default function AdminPage() {
   }
 
   async function executeBulkUpload(
-    skippedGroupKeys: Set<string> = new Set()
+    skippedGroupKeys: Set<string> = new Set(),
+    targetGroupKeys: Set<string> | null = null
   ) {
     skippedGroupKeys.forEach((key) =>
       updateBulkGroup(key, { status: "skipped" })
@@ -1189,24 +1491,26 @@ export default function AdminPage() {
 
     const validGroups = bulkGroups.filter(
       (group) =>
+        group.status !== "done" &&
         !skippedGroupKeys.has(group.key) &&
+        (!targetGroupKeys || targetGroupKeys.has(group.key)) &&
         group.files.some((item) => item.role === "normalBrstm")
     );
 
     if (validGroups.length === 0) {
       setMessage(
         skippedGroupKeys.size > 0
-          ? "重複候補をすべて「アップロードしない」にしました。"
-          : "通常用BRSTMがある曲がありません。"
+          ? "対象曲をすべて「アップロードしない」にしました。"
+          : "通常用BRSTMがある未アップロード曲がありません。"
       );
       return;
     }
 
     setBulkUploading(true);
     setMessage(
-      skippedGroupKeys.size > 0
-        ? `${skippedGroupKeys.size}曲を除外して一括アップロードを開始しました。`
-        : "一括アップロードを開始しました。"
+      validGroups.length === 1
+        ? `${validGroups[0].title} をアップロード中...`
+        : `${validGroups.length}曲のアップロードを開始しました。`
     );
 
     let successCount = 0;
@@ -1242,14 +1546,14 @@ export default function AdminPage() {
 
         const { error } = await supabase.from("tracks").insert({
           title: group.title.trim(),
-          title_en: group.titleEn.trim() || group.title.trim(),
+          title_en: group.titleEn.trim(),
           source: "",
           category: group.category,
           slot_name: "",
           example_ct: "",
           loop_type: group.loopType,
           description: "",
-          tags: group.tags,
+          tags: normalizeTagsForSave(group.tags),
           brstm_url: brstmUrl,
           preview_url: previewUrl,
           brstm_lap3_url: brstmLap3Url,
@@ -1270,22 +1574,27 @@ export default function AdminPage() {
 
     setBulkUploading(false);
     setMessage(
-      `一括登録完了: ${successCount}曲 / 除外: ${skippedGroupKeys.size}曲 / エラー: ${errorCount}曲。`
+      `登録完了: ${successCount}曲 / 除外: ${skippedGroupKeys.size}曲 / エラー: ${errorCount}曲。`
     );
     await loadTracks();
   }
 
-  async function handleBulkUpload() {
+  async function prepareGroupUpload(groups: BulkGroup[]) {
     if (bulkUploading) return;
 
-    const validGroups = bulkGroups.filter((group) =>
-      group.files.some((item) => item.role === "normalBrstm")
+    const validGroups = groups.filter(
+      (group) =>
+        group.status !== "done" &&
+        group.files.some((item) => item.role === "normalBrstm")
     );
 
     if (validGroups.length === 0) {
-      setMessage("通常用BRSTMがある曲がありません。");
+      setMessage("通常用BRSTMがある未アップロード曲がありません。");
       return;
     }
+
+    const keys = validGroups.map((group) => group.key);
+    setPendingUploadGroupKeys(keys);
 
     const duplicates = findPublishedDuplicateCandidates(validGroups);
 
@@ -1296,13 +1605,28 @@ export default function AdminPage() {
       return;
     }
 
-    await executeBulkUpload();
+    await executeBulkUpload(new Set(), new Set(keys));
+    setPendingUploadGroupKeys([]);
+  }
+
+  async function handleBulkUpload() {
+    await prepareGroupUpload(bulkGroups);
+  }
+
+  async function handleSingleGroupUpload(groupKey: string) {
+    const group = bulkGroups.find((item) => item.key === groupKey);
+    if (!group) return;
+
+    await prepareGroupUpload([group]);
   }
 
   async function handleConfirmDuplicateUpload() {
     const skipped = new Set<string>(duplicateSkippedGroupKeys);
+    const targets = new Set<string>(pendingUploadGroupKeys);
+
     setShowDuplicateReview(false);
-    await executeBulkUpload(skipped);
+    await executeBulkUpload(skipped, targets);
+    setPendingUploadGroupKeys([]);
   }
 
   async function handlePackSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1331,7 +1655,7 @@ export default function AdminPage() {
     try {
       const { error } = await supabase.from("music_packs").insert({
         title: packTitle.trim(),
-        tags: packTags,
+        tags: normalizeTagsForSave(packTags),
         youtube_url: packYoutubeUrl.trim(),
         zip_url: packZipUrl.trim(),
         is_published: packPublished,
@@ -1340,7 +1664,7 @@ export default function AdminPage() {
       if (error) throw error;
 
       setPackTitle("");
-      setPackTags("");
+      setPackTags("No tag");
       setPackYoutubeUrl("");
       setPackZipUrl("");
       setPackPublished(true);
@@ -1401,7 +1725,7 @@ export default function AdminPage() {
     setEditTitleEn(track.title_en || track.title || "");
     setEditCategory(track.category ?? "コースBGM");
     setEditLoopType(normalizeLoopForSave(track.loop_type) as "loop" | "no");
-    setEditTags(track.tags ?? "");
+    setEditTags(track.tags?.trim() || "No tag");
     setEditIsPublished(track.is_published);
     setEditBrstmFile(null);
     setEditPreviewFile(null);
@@ -1430,14 +1754,14 @@ export default function AdminPage() {
     try {
       const updateData: Record<string, string | boolean> = {
         title: editTitle.trim(),
-        title_en: editTitleEn.trim() || editTitle.trim(),
+        title_en: editTitleEn.trim(),
         source: "",
         category: editCategory,
         slot_name: "",
         example_ct: "",
         loop_type: editLoopType,
         description: "",
-        tags: editTags,
+        tags: normalizeTagsForSave(editTags),
         is_published: editIsPublished,
       };
 
@@ -1722,8 +2046,40 @@ export default function AdminPage() {
 
           {bulkGroups.length > 0 && (
             <>
+              <div
+                className="adminActions"
+                style={{
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "10px",
+                }}
+              >
+                <label
+                  className="checkboxLabel"
+                  style={{ minHeight: 0, cursor: "pointer" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={hideCompletedBulkGroups}
+                    onChange={(event) =>
+                      setHideCompletedBulkGroups(event.target.checked)
+                    }
+                  />
+                  アップロード済みを非表示
+                </label>
+
+                <span className="formMessage">
+                  {completedBulkGroupCount}曲アップロード済み
+                </span>
+              </div>
+
+              {visibleBulkGroups.length === 0 ? (
+                <div className="empty">
+                  すべてアップロード済みです。「アップロード済みを非表示」を外すと確認できます。
+                </div>
+              ) : (
               <div className="adminTrackList">
-                {bulkGroups.map((group) => (
+                {visibleBulkGroups.map((group) => (
                   <article className="adminTrackCard" key={group.key}>
                     <div className="adminForm">
                       <div className="formGrid">
@@ -1843,6 +2199,22 @@ export default function AdminPage() {
                                 {item.extension.toUpperCase()} / 現在:{" "}
                                 {getRoleLabel(item.role)}
                               </div>
+
+                              {group.files.length > 1 && (
+                                <button
+                                  className="secondaryButton"
+                                  style={{
+                                    marginTop: "7px",
+                                    padding: "6px 9px",
+                                    fontSize: "11px",
+                                  }}
+                                  type="button"
+                                  onClick={() => splitBulkFile(group.key, item.id)}
+                                  disabled={bulkUploading || group.status === "done"}
+                                >
+                                  別の曲として分離
+                                </button>
+                              )}
                             </div>
 
                             <label className="formLabel">
@@ -1893,13 +2265,38 @@ export default function AdminPage() {
                         ))}
                       </div>
 
-                      <div className="trackMeta" style={{ marginTop: "10px" }}>
-                        <span>Status: {group.status}</span>
+                      <div
+                        className="adminActions"
+                        style={{
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginTop: "10px",
+                        }}
+                      >
+                        <span className="formMessage">Status: {group.status}</span>
+
+                        <button
+                          className="secondaryButton"
+                          type="button"
+                          onClick={() => handleSingleGroupUpload(group.key)}
+                          disabled={
+                            bulkUploading ||
+                            group.status === "done" ||
+                            !group.files.some(
+                              (item) => item.role === "normalBrstm"
+                            )
+                          }
+                        >
+                          {group.status === "done"
+                            ? "アップロード済み"
+                            : "この曲だけアップロード"}
+                        </button>
                       </div>
                     </div>
                   </article>
                 ))}
               </div>
+              )}
 
               <button
                 className="primaryButton fullButton"
@@ -1909,8 +2306,12 @@ export default function AdminPage() {
               >
                 {bulkUploading
                   ? "まとめてアップロード中..."
-                  : `${bulkGroups.filter((group) =>
-                      group.files.some((item) => item.role === "normalBrstm")
+                  : `${bulkGroups.filter(
+                      (group) =>
+                        group.status !== "done" &&
+                        group.files.some(
+                          (item) => item.role === "normalBrstm"
+                        )
                     ).length}曲をまとめて登録`}
               </button>
             </>
@@ -1927,32 +2328,70 @@ export default function AdminPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) auto",
               gap: "10px",
-              alignItems: "center",
               marginBottom: "10px",
             }}
           >
-            <input
-              className="formInput"
-              value={adminTrackQuery}
-              onChange={(event) => setAdminTrackQuery(event.target.value)}
-              placeholder="曲名・英語名・タグ・カテゴリで検索"
-            />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) auto",
+                gap: "10px",
+                alignItems: "center",
+              }}
+            >
+              <input
+                className="formInput"
+                value={adminTrackQuery}
+                onChange={(event) => setAdminTrackQuery(event.target.value)}
+                placeholder="曲名・英語名・カテゴリ・Loopなどで検索"
+              />
 
-            {adminTrackQuery && (
-              <button
-                className="secondaryButton"
-                type="button"
-                onClick={() => setAdminTrackQuery("")}
+              {(adminTrackQuery || adminTrackTagQuery) && (
+                <button
+                  className="secondaryButton"
+                  type="button"
+                  onClick={() => {
+                    setAdminTrackQuery("");
+                    setAdminTrackTagQuery("");
+                  }}
+                >
+                  クリア
+                </button>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) 220px",
+                gap: "10px",
+              }}
+            >
+              <TagSearchInput
+                className="formInput"
+                value={adminTrackTagQuery}
+                onChange={setAdminTrackTagQuery}
+                suggestions={tagSearchSuggestions}
+                language="ja"
+                placeholder="タグをカンマ区切りで検索 例: Pokémon, ORAS"
+              />
+
+              <select
+                className="formInput"
+                value={adminTrackTagMode}
+                onChange={(event) =>
+                  setAdminTrackTagMode(event.target.value as "all" | "any")
+                }
               >
-                クリア
-              </button>
-            )}
+                <option value="all">完全一致（すべて含む）</option>
+                <option value="any">1つでも一致</option>
+              </select>
+            </div>
           </div>
 
           <p className="formMessage" style={{ marginBottom: "14px" }}>
-            {adminTrackQuery.trim()
+            {hasAdminTrackFilter
               ? `${adminTrackMatches.length}件ヒット${
                   adminTrackMatches.length > 50 ? "（先頭50件を表示）" : ""
                 }`
@@ -2194,8 +2633,8 @@ export default function AdminPage() {
 
             {visibleAdminTracks.length === 0 && (
               <div className="empty">
-                {adminTrackQuery.trim()
-                  ? "条件に一致する登録済み曲はありません。"
+                {hasAdminTrackFilter
+                  ? "条件に一致する登録済み曲はありません."
                   : "登録済みの曲はありません。"}
               </div>
             )}
@@ -2207,7 +2646,7 @@ export default function AdminPage() {
           <h2 className="adminSubTitle">タグ管理</h2>
 
           <p className="formMessage">
-            タグ名の変更・削除は、そのタグを使っているすべての曲とMusic Packに反映されます。
+            タグ名の変更・削除は、そのタグを使っているすべての曲とMusic Packに反映されます。英語名は空欄なら日本語名をそのまま使います。
           </p>
 
           <div
@@ -2250,12 +2689,43 @@ export default function AdminPage() {
                     setBulkTagTrackQuery(event.target.value);
                     setBulkTagSelectedTrackIds([]);
                   }}
-                  placeholder="曲名・英語名・既存タグ・カテゴリ"
+                  placeholder="曲名・英語名・カテゴリ"
                 />
               </label>
             </div>
 
-            {bulkTagTrackQuery.trim() ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) 220px",
+                gap: "10px",
+                marginTop: "10px",
+              }}
+            >
+              <TagSearchInput
+                className="formInput"
+                value={bulkTagFilterQuery}
+                onChange={setBulkTagFilterQuery}
+                onAfterChange={() => setBulkTagSelectedTrackIds([])}
+                suggestions={tagSearchSuggestions}
+                language="ja"
+                placeholder="既存タグをカンマ区切りで絞り込み"
+              />
+
+              <select
+                className="formInput"
+                value={bulkTagFilterMode}
+                onChange={(event) => {
+                  setBulkTagFilterMode(event.target.value as "all" | "any");
+                  setBulkTagSelectedTrackIds([]);
+                }}
+              >
+                <option value="all">完全一致（すべて含む）</option>
+                <option value="any">1つでも一致</option>
+              </select>
+            </div>
+
+            {(bulkTagTrackQuery.trim() || bulkTagFilterQuery.trim()) ? (
               <>
                 <div
                   className="adminActions"
@@ -2382,46 +2852,82 @@ export default function AdminPage() {
                   key={tag}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) auto auto",
-                    gap: "6px",
-                    alignItems: "center",
-                    padding: "7px",
+                    gap: "7px",
+                    padding: "9px",
                     border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: "10px",
                     background: "rgba(255,255,255,0.02)",
                   }}
                 >
-                  <input
-                    className="formInput"
-                    style={{ minWidth: 0, padding: "8px 9px" }}
-                    value={tagDrafts[tag] ?? tag}
-                    onChange={(event) =>
-                      setTagDrafts((current) => ({
-                        ...current,
-                        [tag]: event.target.value,
-                      }))
-                    }
-                  />
+                  <label className="formLabel">
+                    日本語タグ名
+                    <input
+                      className="formInput"
+                      style={{ minWidth: 0, padding: "8px 9px" }}
+                      value={tagDrafts[tag] ?? tag}
+                      onChange={(event) =>
+                        setTagDrafts((current) => ({
+                          ...current,
+                          [tag]: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
 
-                  <button
-                    className="secondaryButton"
-                    style={{ padding: "8px 9px" }}
-                    type="button"
-                    onClick={() => handleRenameTag(tag)}
-                    title="タグ名を変更"
-                  >
-                    変更
-                  </button>
+                  <label className="formLabel">
+                    英語タグ名（空欄なら日本語名）
+                    <input
+                      className="formInput"
+                      style={{ minWidth: 0, padding: "8px 9px" }}
+                      value={
+                        tagEnglishDrafts[tag] ??
+                        tagDefinitions.find(
+                          (definition) =>
+                            definition.name.toLowerCase() === tag.toLowerCase()
+                        )?.name_en ??
+                        ""
+                      }
+                      onChange={(event) =>
+                        setTagEnglishDrafts((current) => ({
+                          ...current,
+                          [tag]: event.target.value,
+                        }))
+                      }
+                      placeholder={tag}
+                    />
+                  </label>
 
-                  <button
-                    className="dangerButton"
-                    style={{ padding: "8px 9px" }}
-                    type="button"
-                    onClick={() => handleDeleteTag(tag)}
-                    title="タグを削除"
-                  >
-                    削除
-                  </button>
+                  <div className="adminActions" style={{ justifyContent: "flex-start" }}>
+                    <button
+                      className="secondaryButton"
+                      style={{ padding: "8px 9px" }}
+                      type="button"
+                      onClick={() => handleRenameTag(tag)}
+                      title="日本語タグ名を変更"
+                    >
+                      日本語名を変更
+                    </button>
+
+                    <button
+                      className="secondaryButton"
+                      style={{ padding: "8px 9px" }}
+                      type="button"
+                      onClick={() => handleSaveTagEnglish(tag)}
+                      title="英語タグ名を保存"
+                    >
+                      英語名を保存
+                    </button>
+
+                    <button
+                      className="dangerButton"
+                      style={{ padding: "8px 9px" }}
+                      type="button"
+                      onClick={() => handleDeleteTag(tag)}
+                      title="タグを削除"
+                    >
+                      削除
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2544,7 +3050,10 @@ export default function AdminPage() {
               <button
                 className="secondaryButton"
                 type="button"
-                onClick={() => setShowDuplicateReview(false)}
+                onClick={() => {
+                  setShowDuplicateReview(false);
+                  setPendingUploadGroupKeys([]);
+                }}
               >
                 戻って確認する
               </button>

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
 import PackCreator from "@/components/PackCreator";
 import VolumeControl from "@/components/VolumeControl";
+import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 
 type Track = {
   id: number;
@@ -33,6 +34,11 @@ type MusicPack = {
 
 type CategoryFilter = "すべて" | "コースBGM" | "その他BGM" | "Music Pack" | "Pack作成";
 
+type TagDefinition = {
+  name: string;
+  name_en: string;
+};
+
 const translations = {
   ja: {
     subtitle:
@@ -49,6 +55,9 @@ const translations = {
     ascending: "昇順",
     descending: "降順",
     loopOnly: "Loopのみ",
+    tagSearch: "タグをカンマ区切りで検索",
+    tagAll: "完全一致（すべて含む）",
+    tagAny: "1つでも一致",
     random: "ランダム選曲",
     clearRandom: "ランダム解除",
     published: "公開中のBRSTM",
@@ -82,6 +91,9 @@ const translations = {
     ascending: "Ascending",
     descending: "Descending",
     loopOnly: "Loop only",
+    tagSearch: "Tags separated by commas",
+    tagAll: "Match all",
+    tagAny: "Match any",
     random: "Random Pick",
     clearRandom: "Clear Random",
     published: "Available BRSTMs",
@@ -149,9 +161,50 @@ function getYouTubeEmbedUrl(url: string) {
   }
 }
 
+function parseTagSearch(
+  value: string,
+  aliasMap?: ReadonlyMap<string, string>
+) {
+  const seen = new Set<string>();
+
+  return value
+    .split(",")
+    .map((tag) => tag.trim().replace(/^#/, "").toLowerCase())
+    .filter(Boolean)
+    .map((tag) => aliasMap?.get(tag) ?? tag)
+    .filter((tag) => {
+      if (seen.has(tag)) return false;
+      seen.add(tag);
+      return true;
+    });
+}
+
+function matchesTagSearch(
+  tagsValue: string,
+  searchValue: string,
+  mode: "all" | "any",
+  aliasMap?: ReadonlyMap<string, string>
+) {
+  const requested = parseTagSearch(searchValue, aliasMap);
+  if (requested.length === 0) return true;
+
+  const tags = new Set(
+    (tagsValue || "No tag")
+      .split(",")
+      .map((tag) => tag.trim().replace(/^#/, "").toLowerCase())
+      .filter(Boolean)
+  );
+
+  return mode === "all"
+    ? requested.every((tag) => tags.has(tag))
+    : requested.some((tag) => tags.has(tag));
+}
+
 export default function Home() {
   const [language, setLanguage] = useState<"ja" | "en">("ja");
   const [query, setQuery] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
+  const [tagMatchMode, setTagMatchMode] = useState<"all" | "any">("all");
   const [category, setCategory] = useState<CategoryFilter>("すべて");
   const [sort, setSort] = useState<"newest" | "name">("newest");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -159,6 +212,7 @@ export default function Home() {
   const [randomTrackId, setRandomTrackId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [packs, setPacks] = useState<MusicPack[]>([]);
+  const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
@@ -170,6 +224,7 @@ export default function Home() {
   useEffect(() => {
     loadTracks();
     loadPacks();
+    loadTagDefinitions();
 
     const savedVolume = window.localStorage.getItem("kei-brstm-hub-volume");
     if (savedVolume !== null) {
@@ -226,7 +281,12 @@ export default function Home() {
       return;
     }
 
-    setTracks((data as Track[]) ?? []);
+    setTracks(
+      ((data as Track[]) ?? []).map((track) => ({
+        ...track,
+        tags: track.tags?.trim() || "No tag",
+      }))
+    );
     setLoading(false);
   }
 
@@ -252,11 +312,97 @@ export default function Home() {
       return;
     }
 
-    setPacks((data as MusicPack[]) ?? []);
+    setPacks(
+      ((data as MusicPack[]) ?? []).map((pack) => ({
+        ...pack,
+        tags: pack.tags?.trim() || "No tag",
+      }))
+    );
+  }
+
+  async function loadTagDefinitions() {
+    const { data, error } = await supabase
+      .from("tag_definitions")
+      .select("name, name_en")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.warn("Tag definitions could not be loaded.", error);
+      setTagDefinitions([]);
+      return;
+    }
+
+    setTagDefinitions((data as TagDefinition[]) ?? []);
   }
 
   function getDisplayTitle(track: Track) {
     return language === "en" ? track.title_en || track.title : track.title;
+  }
+
+  const tagSearchSuggestions = useMemo<TagSuggestion[]>(() => {
+    const names = new Map<string, string>();
+
+    const collect = (value: string) => {
+      for (const raw of (value || "No tag").split(",")) {
+        const name = raw.trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (!names.has(key)) names.set(key, name);
+      }
+    };
+
+    tracks.forEach((track) => collect(track.tags));
+    packs.forEach((pack) => collect(pack.tags));
+    tagDefinitions.forEach((definition) => {
+      const name = definition.name.trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!names.has(key)) names.set(key, name);
+    });
+
+    const definitionMap = new Map(
+      tagDefinitions.map((definition) => [
+        definition.name.toLowerCase(),
+        definition.name_en || "",
+      ])
+    );
+
+    return Array.from(names.values())
+      .map((name) => ({
+        name,
+        name_en: definitionMap.get(name.toLowerCase()) || "",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tracks, packs, tagDefinitions]);
+
+  const tagAliasMap = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const suggestion of tagSearchSuggestions) {
+      const canonical = suggestion.name.toLowerCase();
+      map.set(canonical, canonical);
+
+      const english = suggestion.name_en?.trim().toLowerCase();
+      if (english) map.set(english, canonical);
+    }
+
+    return map;
+  }, [tagSearchSuggestions]);
+
+  const tagEnglishMap = useMemo(
+    () =>
+      new Map(
+        tagDefinitions.map((definition) => [
+          definition.name.toLowerCase(),
+          definition.name_en || "",
+        ])
+      ),
+    [tagDefinitions]
+  );
+
+  function getDisplayTagName(tag: string) {
+    if (language !== "en") return tag;
+    return tagEnglishMap.get(tag.toLowerCase())?.trim() || tag;
   }
 
   const filteredTracks = useMemo(() => {
@@ -267,6 +413,9 @@ export default function Home() {
     return [...tracks]
       .filter((track) => category === "すべて" || track.category === category)
       .filter((track) => !loopOnly || hasLoop(track.loop_type))
+      .filter((track) =>
+        matchesTagSearch(track.tags, tagQuery, tagMatchMode, tagAliasMap)
+      )
       .filter((track) => {
         const searchableText = [
           track.title,
@@ -296,6 +445,9 @@ export default function Home() {
     sort,
     sortDirection,
     loopOnly,
+    tagQuery,
+    tagMatchMode,
+    tagAliasMap,
     language,
   ]);
 
@@ -312,6 +464,9 @@ export default function Home() {
       .filter((pack) =>
         [pack.title, pack.tags].join(" ").toLowerCase().includes(keyword)
       )
+      .filter((pack) =>
+        matchesTagSearch(pack.tags, tagQuery, tagMatchMode, tagAliasMap)
+      )
       .sort((a, b) => {
         if (sort === "name") {
           return a.title.localeCompare(b.title) * direction;
@@ -319,7 +474,7 @@ export default function Home() {
 
         return a.created_at.localeCompare(b.created_at) * direction;
       });
-  }, [packs, query, sort, sortDirection]);
+  }, [packs, query, tagQuery, tagMatchMode, tagAliasMap, sort, sortDirection]);
 
   const categories = [
     { value: "すべて" as CategoryFilter, label: t.all },
@@ -330,7 +485,20 @@ export default function Home() {
   ];
 
   function handleTagClick(tag: string) {
-    setQuery(tag);
+    const normalized = tag.trim().replace(/^#/, "").toLowerCase();
+    const existing = tagQuery
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (
+      !existing.some(
+        (item) => item.replace(/^#/, "").toLowerCase() === normalized
+      )
+    ) {
+      setTagQuery([...existing, tag].join(", "));
+    }
+
     setRandomTrackId(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -475,11 +643,11 @@ export default function Home() {
               type="button"
               onClick={() => handleTagClick(tag)}
             >
-              #{tag}
+              #{getDisplayTagName(tag)}
             </button>
           ) : (
             <span className="tag" key={tag}>
-              #{tag}
+              #{getDisplayTagName(tag)}
             </span>
           )
         )}
@@ -660,6 +828,39 @@ export default function Home() {
             </div>
           )}
 
+          {!isPackCreatorView && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) 220px",
+                gap: "12px",
+                marginTop: "12px",
+              }}
+            >
+              <TagSearchInput
+                className="search"
+                placeholder={t.tagSearch}
+                value={tagQuery}
+                onChange={setTagQuery}
+                onAfterChange={() => setRandomTrackId(null)}
+                suggestions={tagSearchSuggestions}
+                language={language}
+              />
+
+              <select
+                className="sort"
+                value={tagMatchMode}
+                onChange={(event) => {
+                  setTagMatchMode(event.target.value as "all" | "any");
+                  setRandomTrackId(null);
+                }}
+              >
+                <option value="all">{t.tagAll}</option>
+                <option value="any">{t.tagAny}</option>
+              </select>
+            </div>
+          )}
+
           <div className="categories">
             {categories.map((item) => (
               <button
@@ -682,6 +883,7 @@ export default function Home() {
         {isPackCreatorView ? (
           <PackCreator
             tracks={tracks}
+            tagDefinitions={tagDefinitions}
             language={language}
             volume={volume}
             playingKey={playingKey}

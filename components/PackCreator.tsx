@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type DragEvent } from "react";
 import { createStoredZip, type ZipEntry } from "@/lib/simpleZip";
+import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 import styles from "./PackCreator.module.css";
 
 type PackTrack = {
@@ -15,6 +16,11 @@ type PackTrack = {
   preview_url: string;
   brstm_lap3_url: string;
   preview_lap3_url: string;
+};
+
+type TagDefinition = {
+  name: string;
+  name_en: string;
 };
 
 type Slot = {
@@ -207,14 +213,55 @@ function hasLoop(track: PackTrack) {
   return track.loop_type === "loop" || track.loop_type === "perfect_loop";
 }
 
+function parseTagSearch(
+  value: string,
+  aliasMap?: ReadonlyMap<string, string>
+) {
+  const seen = new Set<string>();
+
+  return value
+    .split(",")
+    .map((tag) => tag.trim().replace(/^#/, "").toLowerCase())
+    .filter(Boolean)
+    .map((tag) => aliasMap?.get(tag) ?? tag)
+    .filter((tag) => {
+      if (seen.has(tag)) return false;
+      seen.add(tag);
+      return true;
+    });
+}
+
+function matchesTagSearch(
+  tagsValue: string,
+  searchValue: string,
+  mode: "all" | "any",
+  aliasMap?: ReadonlyMap<string, string>
+) {
+  const requested = parseTagSearch(searchValue, aliasMap);
+  if (requested.length === 0) return true;
+
+  const tags = new Set(
+    (tagsValue || "No tag")
+      .split(",")
+      .map((tag) => tag.trim().replace(/^#/, "").toLowerCase())
+      .filter(Boolean)
+  );
+
+  return mode === "all"
+    ? requested.every((tag) => tags.has(tag))
+    : requested.some((tag) => tags.has(tag));
+}
+
 export default function PackCreator({
   tracks,
+  tagDefinitions,
   language,
   volume,
   playingKey,
   onPreview,
 }: {
   tracks: PackTrack[];
+  tagDefinitions: TagDefinition[];
   language: "ja" | "en";
   volume: number;
   playingKey: string | null;
@@ -226,6 +273,8 @@ export default function PackCreator({
 }) {
   const [assignments, setAssignments] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
+  const [tagMatchMode, setTagMatchMode] = useState<"all" | "any">("all");
   const [loopOnly, setLoopOnly] = useState(false);
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
@@ -237,28 +286,78 @@ export default function PackCreator({
     [tracks]
   );
 
+  const tagSearchSuggestions = useMemo<TagSuggestion[]>(() => {
+    const names = new Map<string, string>();
+
+    for (const track of tracks) {
+      for (const raw of (track.tags || "No tag").split(",")) {
+        const name = raw.trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (!names.has(key)) names.set(key, name);
+      }
+    }
+
+    for (const definition of tagDefinitions) {
+      const name = definition.name.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!names.has(key)) names.set(key, name);
+    }
+
+    const definitionMap = new Map(
+      tagDefinitions.map((definition) => [
+        definition.name.toLowerCase(),
+        definition.name_en || "",
+      ])
+    );
+
+    return Array.from(names.values())
+      .map((name) => ({
+        name,
+        name_en: definitionMap.get(name.toLowerCase()) || "",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tracks, tagDefinitions]);
+
+  const tagAliasMap = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const suggestion of tagSearchSuggestions) {
+      const canonical = suggestion.name.toLowerCase();
+      map.set(canonical, canonical);
+
+      const english = suggestion.name_en?.trim().toLowerCase();
+      if (english) map.set(english, canonical);
+    }
+
+    return map;
+  }, [tagSearchSuggestions]);
+
   const filteredTracks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
     return tracks
-      .filter((track) => !loopOnly || hasLoop(track))
       .filter((track) =>
         [
           track.title,
           track.title_en,
-          track.tags,
           track.category,
         ]
           .join(" ")
           .toLowerCase()
           .includes(keyword)
       )
+      .filter((track) =>
+        matchesTagSearch(track.tags, tagQuery, tagMatchMode, tagAliasMap)
+      )
+      .filter((track) => !loopOnly || hasLoop(track))
       .sort((a, b) =>
         displayTrackTitle(a, language).localeCompare(
           displayTrackTitle(b, language)
         )
       );
-  }, [tracks, query, loopOnly, language]);
+  }, [tracks, query, tagQuery, tagMatchMode, tagAliasMap, loopOnly, language]);
 
   const assignedKeys = Object.keys(assignments).filter(
     (key) => assignments[key] != null
@@ -583,10 +682,54 @@ export default function PackCreator({
             onChange={(event) => setQuery(event.target.value)}
             placeholder={
               language === "ja"
-                ? "曲名・タグで検索"
-                : "Search title or tags"
+                ? "曲名・カテゴリで検索"
+                : "Search title or category"
             }
           />
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) 145px",
+              gap: "8px",
+              marginTop: "8px",
+            }}
+          >
+            <TagSearchInput
+              className={styles.search}
+              value={tagQuery}
+              onChange={setTagQuery}
+              suggestions={tagSearchSuggestions}
+              language={language}
+              placeholder={
+                language === "ja"
+                  ? "タグをカンマ区切りで検索"
+                  : "Tags separated by commas"
+              }
+            />
+
+            <select
+              value={tagMatchMode}
+              onChange={(event) =>
+                setTagMatchMode(event.target.value as "all" | "any")
+              }
+              style={{
+                minWidth: 0,
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: "10px",
+                background: "#151518",
+                color: "inherit",
+                padding: "0 8px",
+              }}
+            >
+              <option value="all">
+                {language === "ja" ? "完全一致" : "Match all"}
+              </option>
+              <option value="any">
+                {language === "ja" ? "1つでも一致" : "Match any"}
+              </option>
+            </select>
+          </div>
 
           <button
             type="button"
