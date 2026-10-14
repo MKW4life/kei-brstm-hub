@@ -1,0 +1,36 @@
+:root {
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #09090b;
+  color: #fafafa;
+}
+* { box-sizing: border-box; }
+html { min-width: 320px; }
+body { margin: 0; min-height: 100vh; }
+a { color: inherit; }
+.shell { width: min(1100px, calc(100% - 40px)); margin: 0 auto; }
+.site-header { display: flex; align-items: center; height: 84px; border-bottom: 1px solid #242427; }
+.brand { display: inline-flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 700; text-decoration: none; letter-spacing: .02em; }
+.brand-mark { display: grid; place-items: center; width: 36px; height: 36px; color: #09090b; background: #f4f4f5; border-radius: 11px; font-weight: 900; font-size: 19px; }
+main { padding: 76px 0 96px; }
+h1 { margin: 0 0 33px; font-size: clamp(32px, 5vw, 48px); letter-spacing: -.035em; }
+.projects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.project-card { min-height: 260px; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 27px; border: 1px solid #29292d; border-radius: 18px; background: #131316; }
+.project-icon { display: grid; place-items: center; width: 47px; height: 47px; padding: 11px; background: #222227; border: 1px solid #34343a; border-radius: 13px; }
+.project-icon svg { width: 24px; height: 24px; }
+h2 { font-size: 19px; letter-spacing: -.015em; margin: 26px 0 18px; }
+.actions { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.action { min-height: 42px; padding: 11px 13px; border-radius: 9px; background: #f4f4f5; color: #121214; text-decoration: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; font-weight: 700; margin-top: auto; width: 100%; }
+.action:hover { background: #d4d4d8; }
+.action-secondary { margin-top: 0; border: 1px solid #35353b; background: transparent; color: #f4f4f5; }
+.action-secondary:hover { background: #28282e; }
+a:focus-visible { outline: 3px solid #86a3ff; outline-offset: 3px; }
+@media (max-width: 850px) {
+  .projects { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 580px) {
+  .shell { width: min(100% - 28px, 480px); }
+  main { padding: 48px 0 64px; }
+  .projects { grid-template-columns: 1fr; }
+  .project-card { min-height: 225px; }
+}
