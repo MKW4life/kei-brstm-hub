@@ -723,9 +723,7 @@ export default function Home() {
               : undefined
           }
         >
-          <p className="label">CTGP-R MUSIC LIBRARY</p>
           <h1>Kei BRSTM Hub</h1>
-          <p className="subtitle">{t.subtitle}</p>
         </section>
 
         <section
@@ -1069,7 +1067,7 @@ export default function Home() {
       </main>
 
       <footer className="footer">
-        <p>© 2026 Kei BRSTM Hub · {t.footer}</p>
+        <p>© 2026 Kei BRSTM Hub</p>
       </footer>
     </div>
   );
