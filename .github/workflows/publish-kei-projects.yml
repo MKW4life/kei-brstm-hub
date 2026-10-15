@@ -8,6 +8,7 @@ on:
       firebase_project_id:
         description: "Firebase Spark project ID (not the display name)"
         required: true
+        default: kei-projects-33b53
         type: string
       destination:
         description: "Deployment destination"
@@ -44,6 +45,10 @@ jobs:
           set -euo pipefail
           if ! [[ "$FIREBASE_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
             echo "::error::Please enter a valid Firebase project ID."
+            exit 1
+          fi
+          if [[ "$FIREBASE_PROJECT_ID" != "kei-projects-33b53" ]]; then
+            echo "::error::This workflow is restricted to the approved Kei Projects Firebase project."
             exit 1
           fi
           if [[ -z "$FIREBASE_SERVICE_ACCOUNT" ]]; then
