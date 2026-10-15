@@ -13,6 +13,7 @@ const statsJs = read("public/stats.js");
 const statsHtml = read("public/stats.html");
 const config = read("public/projects-config.js");
 const firebase = JSON.parse(read("firebase.json"));
+const firebaseRc = JSON.parse(read(".firebaserc"));
 const publishWorkflow = readFileSync(join(projectRoot, "..", ".github", "workflows", "publish-kei-projects.yml"), "utf8");
 
 function check(label, run) {
@@ -30,6 +31,12 @@ check("only no-cost Firebase Hosting is configured", () => {
   assert.equal(firebase.hosting.public, "public");
   assert.equal(firebase.hosting.rewrites, undefined);
   assert.equal(firebase.hosting.predeploy, undefined);
+});
+
+check("deployment targets the confirmed Firebase Spark project", () => {
+  assert.equal(firebaseRc.projects.default, "kei-projects-33b53");
+  assert.match(publishWorkflow, /default: kei-projects-33b53/);
+  assert.match(publishWorkflow, /This workflow is restricted to the approved Kei Projects Firebase project/);
 });
 
 check("existing service entry routes remain temporary HTTPS redirects", () => {
