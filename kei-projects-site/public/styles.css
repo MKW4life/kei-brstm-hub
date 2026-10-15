@@ -14,7 +14,7 @@ a { color: inherit; }
 .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; color: #09090b; background: #f4f4f5; border-radius: 11px; font-weight: 900; font-size: 19px; }
 main { padding: 76px 0 96px; }
 h1 { margin: 0 0 33px; font-size: clamp(32px, 5vw, 48px); letter-spacing: -.035em; }
-.projects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
 .project-card[hidden] { display: none; }
 .project-card { min-height: 260px; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 27px; border: 1px solid #29292d; border-radius: 18px; background: #131316; }
 .project-icon { display: grid; place-items: center; width: 47px; height: 47px; padding: 11px; background: #222227; border: 1px solid #34343a; border-radius: 13px; }
