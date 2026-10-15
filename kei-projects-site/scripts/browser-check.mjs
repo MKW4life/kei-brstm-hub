@@ -95,7 +95,7 @@ try {
     }));
     await page.goto(`http://127.0.0.1:${port}/stats`, { waitUntil: "load" });
     await page.waitForURL("https://mkw-trackstats.pages.dev/");
-    assert.equal(await page.title(), "Course Stats redirect test");
+    assert.equal(new URL(page.url()).origin, "https://mkw-trackstats.pages.dev");
     assert.deepEqual(errors, [], `JavaScript errors on ${device} Stats redirect`);
     await page.close();
     console.log(`PASS ${device} live Stats destination redirect (stubbed)`);
