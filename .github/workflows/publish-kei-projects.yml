@@ -33,12 +33,13 @@ jobs:
     env:
       FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
       DESTINATION: ${{ inputs.destination }}
-      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Validate Firebase project ID and service account
         shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS }}
         run: |
           set -euo pipefail
           if ! [[ "$FIREBASE_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
@@ -49,6 +50,18 @@ jobs:
             echo "::error::GitHub secret FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS is not configured."
             exit 1
           fi
+          node -e '
+            try {
+              const credential = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+              if (credential.project_id !== process.env.FIREBASE_PROJECT_ID) {
+                console.error("::error::Firebase credential project ID does not match the selected project.");
+                process.exit(1);
+              }
+            } catch {
+              console.error("::error::The Firebase service account secret is not valid JSON.");
+              process.exit(1);
+            }
+          '
           if [[ "$DESTINATION" != "preview" && "$DESTINATION" != "live" ]]; then
             echo "::error::Only preview and live are supported."
             exit 1
