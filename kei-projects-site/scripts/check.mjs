@@ -13,6 +13,7 @@ const statsJs = read("public/stats.js");
 const statsHtml = read("public/stats.html");
 const config = read("public/projects-config.js");
 const firebase = JSON.parse(read("firebase.json"));
+const publishWorkflow = readFileSync(join(projectRoot, "..", ".github", "workflows", "publish-kei-projects.yml"), "utf8");
 
 function check(label, run) {
   try {
@@ -99,6 +100,19 @@ check("sample config contains no unverified URL", () => {
   const window = {};
   vm.runInNewContext(config, { window });
   assert.equal(window.keiProjectsConfig.courseStatsUrl, "");
+});
+
+check("Firebase deployment is opt-in and preview-first", () => {
+  assert.match(publishWorkflow, /^  workflow_dispatch:/m);
+  assert.doesNotMatch(publishWorkflow, /^  push:/m);
+  assert.doesNotMatch(publishWorkflow, /^  pull_request:/m);
+  assert.match(publishWorkflow, /default: preview/);
+  assert.match(publishWorkflow, /channelId: kei-projects-preview/);
+  assert.match(publishWorkflow, /channelId: live/);
+  assert.match(publishWorkflow, /entryPoint: kei-projects-site/g);
+  assert.match(publishWorkflow, /FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS/);
+  assert.match(publishWorkflow, /project_id/);
+  assert.match(publishWorkflow, /Validate Spark-only Hosting configuration/);
 });
 
 check("Spark-restricted executable files are not shipped", () => {
