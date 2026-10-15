@@ -60,8 +60,9 @@ try {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load" });
     assert.equal(await page.title(), "Kei Projects");
     assert.equal(await page.getByRole("heading", { name: "Kei Projects" }).count(), 1);
-    assert.equal(await page.locator(".project-card:visible").count(), 2);
-    assert.equal(await page.locator("#stats-card").isVisible(), false);
+    assert.equal(await page.locator(".project-card:visible").count(), 3);
+    assert.equal(await page.locator("#stats-card").isVisible(), true);
+    assert.equal(await page.locator("#stats-link").getAttribute("href"), "/stats");
     for (const [text, href] of [
       ["BRSTMを探す", "/music"],
       ["ラウンジカードを開く", "/lounge"],
@@ -80,12 +81,18 @@ try {
     await page.screenshot({ path: join(screenshotsDir, `kei-projects-${device}.png`), fullPage: true });
     console.log(`PASS ${device} landing page links, layout, and screenshot`);
 
+    // Stub the external site: test the redirect target without depending on Cloudflare availability.
+    await page.route("https://mkw-trackstats.pages.dev/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><html><head><title>Course Stats redirect test</title></head><body>Redirect OK</body></html>",
+    }));
     await page.goto(`http://127.0.0.1:${port}/stats`, { waitUntil: "load" });
-    assert.equal(await page.title(), "MKW Course Stats — Kei Projects");
-    assert.equal(await page.getByRole("link", { name: "Kei Projectsに戻る" }).getAttribute("href"), "/");
-    assert.deepEqual(errors, [], `JavaScript errors on ${device} Stats route`);
+    await page.waitForURL("https://mkw-trackstats.pages.dev/");
+    assert.equal(await page.title(), "Course Stats redirect test");
+    assert.deepEqual(errors, [], `JavaScript errors on ${device} Stats redirect`);
     await page.close();
-    console.log(`PASS ${device} offline Stats fallback`);
+    console.log(`PASS ${device} live Stats destination redirect (stubbed)`);
   }
 } finally {
   if (browser) await browser.close();
