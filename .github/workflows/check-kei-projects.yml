@@ -7,6 +7,7 @@ on:
       - "components/KeiProjectRail.tsx"
       - "package*.json"
       - ".github/workflows/check-kei-projects.yml"
+      - ".github/workflows/publish-kei-projects.yml"
   push:
     branches:
       - main
