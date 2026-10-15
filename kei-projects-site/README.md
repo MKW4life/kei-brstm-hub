@@ -4,13 +4,13 @@ A static portal for Kei BRSTM Hub, Kei Lounge Card (including MKW Item Counter),
 
 ## Free deployment
 
-1. Create a Firebase project on the **Spark (no-cost)** plan. Do not attach a billing account.
+1. Use the existing Firebase project `kei-projects-33b53` on the **Spark (no-cost)** plan. Do not attach a billing account.
 2. Open a terminal in `kei-projects-site/`.
 3. Run:
 
 ```sh
 npx firebase-tools login
-npx firebase-tools deploy --only hosting --project YOUR_FIREBASE_PROJECT_ID
+npx firebase-tools deploy --only hosting --project kei-projects-33b53
 ```
 
 Replace `YOUR_FIREBASE_PROJECT_ID` with the actual project ID. Firebase has **not** been deployed by this pull request.
