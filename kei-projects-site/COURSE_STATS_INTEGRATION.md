@@ -1,8 +1,8 @@
 # MKW Course Stats integration notes
 
-The Course Stats application is currently **not migrated**. The source archive was provided in the conversation but could not be opened in the current execution environment. Do not replace the original application or import historical scores from guessed data.
+The Course Stats application is **already deployed** at `https://mkw-trackstats.pages.dev/` on Cloudflare Pages, with D1 binding `DB` pointing to `mkw-trackstats` and the existing `ADMIN_PASSWORD` secret. These were verified using the owner's Cloudflare settings and live UI on 2026-10-15. The historical data should remain in that D1 database. Do not replace the application, overwrite D1, or import historical scores from guessed data.
 
-## Confirmed from the prior design, not yet verified against the deployed source
+## Original architecture and verification scope
 
 The approved design calls for:
 - A React/Vinext frontend with Cloudflare Workers backend and D1 persistence.
@@ -12,7 +12,7 @@ The approved design calls for:
 - Admin-only deletion, replacement and restoration.
 - Atomic writes, accurate course averages and preservation of original player identities.
 
-These are **design requirements**, not claims that every feature currently works in the uploaded ZIP or production.
+These are design requirements, not proof that every feature is healthy in production. The user confirmed the live home and existing records (32 tables, 353 accepted races, 187 players shown). Authentication, import and modification operations have not been retested against production, and must not be exercised destructively.
 
 ## Spark-compatible migration
 
@@ -20,11 +20,11 @@ Do not move a D1-backed application directly to Firebase Hosting: Spark static h
 
 Phase 1 (implemented here):
 1. Expose `/stats` as a stable portal path.
-2. Leave the Course Stats card hidden until the real HTTPS deployment is verified.
-3. Put the verified URL in `public/projects-config.js`. The portal then makes a client-side redirect.
+2. Confirm the live deployment and reveal its portal card.
+3. Put `https://mkw-trackstats.pages.dev/` in `public/projects-config.js`. The portal then makes a client-side redirect.
 4. Keep all existing API endpoints, data and admin permissions at the original service.
 
-Later migration, only after source audit:
+Only if future same-origin migration is separately requested:
 1. Inventory `app/api/**`, Worker bindings and D1 migrations.
 2. Confirm existing data ownership, export and backup procedures before changes.
 3. Choose whether to keep the Worker/D1 API (recommended when Spark billing must remain off).
@@ -33,7 +33,7 @@ Later migration, only after source audit:
 6. Validate import, duplicate prevention, mobile layout and administrator permissions against live-like test data.
 7. Migrate URLs only after confirming existing history, and never silently overwrite the live database.
 
-The contents of the old design and the original app must be compared before production changes.
+The existing production site is functional; avoid migrating its D1 database or admin secrets merely to add a portal link.
 
 ## External dependencies
 
