@@ -1,33 +1,63 @@
-# Kei Projects — Firebase Hosting entry
+# Kei Projects — Firebase Spark Hosting
 
-This directory contains a standalone static landing page for Firebase Hosting on the free Spark plan. It does not replace the current Next.js apps or their APIs.
+A static portal for Kei BRSTM Hub, Kei Lounge Card (including MKW Item Counter), and MKW Course Stats. This is a **shared entry point**, not yet a merged Next.js application. Existing services and APIs remain on their original hosts.
 
-## Deploy
+## Free deployment
 
-From this directory:
+1. Create a Firebase project on the **Spark (no-cost)** plan. Do not attach a billing account.
+2. Open a terminal in `kei-projects-site/`.
+3. Run:
 
 ```sh
 npx firebase-tools login
 npx firebase-tools deploy --only hosting --project YOUR_FIREBASE_PROJECT_ID
 ```
 
-Create a Firebase project with the **Spark (free)** plan first. Replace `YOUR_FIREBASE_PROJECT_ID` with that project's ID. Deployment has not been performed by this change.
+Replace `YOUR_FIREBASE_PROJECT_ID` with the actual project ID. Firebase has **not** been deployed by this pull request.
 
-## Current destinations
+Do not run `firebase init` over the existing `firebase.json` unless you intend to regenerate it.
 
-- Kei BRSTM Hub: https://kei-brstm-hub.vercel.app/
-- Kei Lounge Card: https://kei-lounge-cards.vercel.app/
-- Item Counter: https://kei-lounge-cards.vercel.app/item-counter
-- MKW Course Stats: https://mkw-trackstats.hasumimihate.chatgpt.site/
+## Stable portal routes
 
-The Course Stats link is based on the previously shared deployment and should be tested before going live.
+Firebase Hosting uses **temporary 302 redirects** so the portal URLs can be retained when services are migrated later:
 
-## Migration safety
+| Portal path | Current destination |
+| --- | --- |
+| `/music` | `https://kei-brstm-hub.vercel.app/` |
+| `/lounge` | `https://kei-lounge-cards.vercel.app/` |
+| `/lounge/item-counter` | `https://kei-lounge-cards.vercel.app/item-counter` |
 
-This is **phase 1: a unified entry point**, not a single-origin migration. Links currently open the existing services.
+These are redirects; the browser **leaves the Firebase origin**. Do not claim this is a single-domain runtime.
 
-Keep the Vercel-backed Next.js APIs running while migrating interfaces; Firebase Hosting on the Spark plan cannot run these Node.js route handlers. BRSTM Hub uses Supabase and Cloudflare R2; Lounge Card uses Next.js API routes and the Item Counter prefers Upstash Redis.
+The MKW Course Stats tile currently uses `https://mkw-trackstats.hasumimihate.chatgpt.site/`, based on earlier project history. The URL could not be independently verified. Confirm its active deployment before publishing the homepage. Once confirmed, replace the tile URL; only then set a stable `/stats` redirect if desired.
 
-Do not change existing OBS URLs, Windows hotkey API URLs, or Item Counter connection keys during this phase. The Item Counter secret is stored in the existing domain's browser localStorage; changing the domain can otherwise create a different key. A later same-domain integration will require a deliberate key-migration path.
+## Link the existing service navigation
 
-Do not add billing, Blaze-only features, or new paid services without separate authorization.
+After the Firebase URL is live, set **public, nonsecret** environment variables on both existing Vercel projects:
+
+- `NEXT_PUBLIC_KEI_PROJECTS_URL=https://YOUR_FIREBASE_PROJECT_ID.web.app/`
+- `NEXT_PUBLIC_MKW_COURSE_STATS_URL=...` (only if the Course Stats URL is confirmed)
+
+The corresponding GitHub branches add these opt-in navigation links. Redeploy existing Next.js apps after updating public environment variables.
+
+## Compatibility and safety
+
+- Firebase Spark Hosting serves static assets; it does not run the existing Next.js API handlers. Keep these endpoints on Vercel for now.
+- BRSTM files and data remain on Cloudflare R2 and Supabase.
+- Item Counter remains under the Lounge Card origin, uses its existing `/api/item-counter`, and prefers Upstash Redis.
+- Existing OBS browser source URLs and Windows hotkey API URLs **must not be changed** during this phase.
+- The Item Counter connection key is stored in localStorage under the current domain; changing origins without migration would produce a different key.
+- Firebase Spark Hosting restricts uploads of some executable file types, including `.bat`. Keep the hotkey helper download on the existing Vercel site.
+- Never put Upstash, R2, or Supabase privileged keys in a public Firebase asset or `NEXT_PUBLIC_*` value.
+- Neither a Firebase upgrade nor a paid service is required for this portal.
+
+## Release checklist
+
+- [ ] Verify MKW Course Stats destination with a browser before publishing.
+- [ ] Review both draft PRs and confirm production apps remain unchanged.
+- [ ] Create a Spark project with billing **off**.
+- [ ] Publish the static portal.
+- [ ] Test `/music`, `/lounge`, `/lounge/item-counter` redirects.
+- [ ] Test Lounge Card and Item Counter OBS overlays and Windows hotkeys on their original URLs.
+- [ ] Set the opt-in `NEXT_PUBLIC_KEI_PROJECTS_URL` variable and redeploy both Vercel apps.
+- [ ] Only after verification consider a separate same-origin migration plan.
