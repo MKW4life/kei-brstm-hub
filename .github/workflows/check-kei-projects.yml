@@ -21,3 +21,28 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Spark Hosting and portal links
         run: node kei-projects-site/scripts/check.mjs
+
+  browser-validation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Chromium for UI smoke test
+        working-directory: kei-projects-site
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test desktop and mobile layouts
+        run: node kei-projects-site/scripts/browser-check.mjs
+      - name: Save UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kei-projects-ui-screenshots
+          path: kei-projects-site/artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 7
