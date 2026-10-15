@@ -21,7 +21,7 @@ Do not move a D1-backed application directly to Firebase Hosting: Spark static h
 Phase 1 (implemented here):
 1. Expose `/stats` as a stable portal path.
 2. Confirm the live deployment and reveal its portal card.
-3. Put `https://mkw-trackstats.pages.dev/` in `public/projects-config.js`. The portal then makes a client-side redirect.
+3. Configure the verified `https://mkw-trackstats.pages.dev/` URL as the Firebase Hosting `/stats` 302 redirect in `firebase.json`. The card is visible directly in the static HTML, without client-side script/cache dependencies.
 4. Keep all existing API endpoints, data and admin permissions at the original service.
 
 Only if future same-origin migration is separately requested:
