@@ -29,7 +29,20 @@ Firebase Hosting uses **temporary 302 redirects** so the portal URLs can be reta
 
 These are redirects; the browser **leaves the Firebase origin**. Do not claim this is a single-domain runtime.
 
-The MKW Course Stats tile currently uses `https://mkw-trackstats.hasumimihate.chatgpt.site/`, based on earlier project history. The URL could not be independently verified. Confirm its active deployment before publishing the homepage. Once confirmed, replace the tile URL; only then set a stable `/stats` redirect if desired.
+MKW Course Stats is assigned the stable portal route `/stats`. Until its destination can be verified, **the Stats card is hidden**. `/stats` serves a simple back-navigation page when no destination is set.
+
+When a real MKW Course Stats deployment has been verified:
+1. Edit `public/projects-config.js` and set `courseStatsUrl` to that HTTPS URL.
+2. Run `node scripts/check.mjs` from `kei-projects-site/` before deployment.
+3. Deploy the static portal. Its Stats card will now appear and `/stats` will redirect to the configured URL.
+
+This is a client-side redirect, not a Firebase proxy or a copy of MKW Course Stats. Do not use an unverified legacy deployment URL. The source ZIP could not be inspected in the current environment, so the Course Stats application's original functionality has not yet been ported.
+
+## Validation
+
+Run `node scripts/check.mjs` from `kei-projects-site/`. The script uses only Node.js built-in modules and checks Spark-only configuration, service redirects, conditional Stats links, and blocked executable file extensions.
+
+The pull request also has a GitHub Actions check. It does **not** deploy anything or require Firebase credentials. A passing static check is not a replacement for a browser smoke test.
 
 ## Link the existing service navigation
 
@@ -53,7 +66,9 @@ The corresponding GitHub branches add these opt-in navigation links. Redeploy ex
 
 ## Release checklist
 
-- [ ] Verify MKW Course Stats destination with a browser before publishing.
+- [ ] Keep the unverified MKW Course Stats card hidden.
+- [ ] Run `node scripts/check.mjs` and confirm GitHub Actions.
+- [ ] Verify the Course Stats deployment and update `public/projects-config.js` before enabling its card.
 - [ ] Review both draft PRs and confirm production apps remain unchanged.
 - [ ] Create a Spark project with billing **off**.
 - [ ] Publish the static portal.
