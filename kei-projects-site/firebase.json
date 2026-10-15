@@ -37,6 +37,11 @@
         "source": "/lounge/item-counter",
         "destination": "https://kei-lounge-cards.vercel.app/item-counter",
         "type": 302
+      },
+      {
+        "source": "/stats",
+        "destination": "https://mkw-trackstats.pages.dev/",
+        "type": 302
       }
     ]
   }

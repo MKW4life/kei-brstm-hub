@@ -23,8 +23,14 @@ const server = createServer(async (request, response) => {
     response.writeHead(400).end();
     return;
   }
-  const sitePath = pathname === "/" ? "index.html" :
-    pathname === "/stats" ? "stats.html" : pathname.replace(/^\/+/, "");
+  if (pathname === "/stats") {
+    response.writeHead(302, {
+      location: "https://mkw-trackstats.pages.dev/",
+      "cache-control": "no-store",
+    }).end();
+    return;
+  }
+  const sitePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const filename = resolve(publicDir, sitePath);
   if (!filename.startsWith(publicDir + sep)) {
     response.writeHead(403).end();
@@ -89,7 +95,7 @@ try {
     }));
     await page.goto(`http://127.0.0.1:${port}/stats`, { waitUntil: "load" });
     await page.waitForURL("https://mkw-trackstats.pages.dev/");
-    assert.equal(await page.title(), "Course Stats redirect test");
+    assert.equal(new URL(page.url()).origin, "https://mkw-trackstats.pages.dev");
     assert.deepEqual(errors, [], `JavaScript errors on ${device} Stats redirect`);
     await page.close();
     console.log(`PASS ${device} live Stats destination redirect (stubbed)`);

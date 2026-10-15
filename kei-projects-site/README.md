@@ -26,18 +26,19 @@ Firebase Hosting uses **temporary 302 redirects** so the portal URLs can be reta
 | `/music` | `https://kei-brstm-hub.vercel.app/` |
 | `/lounge` | `https://kei-lounge-cards.vercel.app/` |
 | `/lounge/item-counter` | `https://kei-lounge-cards.vercel.app/item-counter` |
+| `/stats` | `https://mkw-trackstats.pages.dev/` |
 
 These are redirects; the browser **leaves the Firebase origin**. Do not claim this is a single-domain runtime.
 
-MKW Course Stats is already live at `https://mkw-trackstats.pages.dev/` with Cloudflare Pages and a D1 binding. The `/stats` portal route redirects to that existing application in the browser; its card is visible on the portal. Cloudflare and D1 remain unchanged.
+MKW Course Stats is already live at `https://mkw-trackstats.pages.dev/` with Cloudflare Pages and a D1 binding. The `/stats` route is a direct Firebase Hosting 302 redirect to that existing application; its card is visible without client-side JavaScript. Cloudflare and D1 remain unchanged.
 
-The verified Course Stats URL is set in `public/projects-config.js`. Run `node scripts/check.mjs` and deploy the portal when that URL needs updating.
+The verified Course Stats URL is set in `firebase.json` under `hosting.redirects`. Run `node scripts/check.mjs` before deploying changes.
 
-This is a client-side redirect, not a Firebase proxy or a copy of MKW Course Stats. The original Cloudflare Pages Functions, D1 binding, admin secret, and historical data stay where they are.
+This is a Firebase Hosting redirect, not a reverse proxy or a copy of MKW Course Stats. The original Cloudflare Pages Functions, D1 binding, admin secret, and historical data stay where they are.
 
 ## Validation
 
-Run `node scripts/check.mjs` from `kei-projects-site/`. The script uses only Node.js built-in modules and checks Spark-only configuration, service redirects, conditional Stats links, and blocked executable file extensions.
+Run `node scripts/check.mjs` from `kei-projects-site/`. The script uses only Node.js built-in modules and checks Spark-only configuration, service redirects, static Stats card visibility, and blocked executable file extensions.
 
 The pull request also has a GitHub Actions check. It does **not** deploy anything or require Firebase credentials. A passing static check is not a replacement for a browser smoke test.
 
@@ -65,7 +66,7 @@ The verified links are enabled by default in BRSTM Hub and Lounge Card. No Verce
 
 - [x] Verify live MKW Course Stats and enable its portal card.
 - [ ] Run `node scripts/check.mjs` and confirm GitHub Actions.
-- [x] Set `public/projects-config.js` to the verified Cloudflare Pages destination.
+- [x] Set a Firebase Hosting `/stats` redirect to the verified Cloudflare Pages destination.
 - [x] Review and merge original portal/navigation PRs.
 - [x] Create a Spark project with billing **off**.
 - [x] Publish the initial static portal.

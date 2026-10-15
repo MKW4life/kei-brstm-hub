@@ -56,7 +56,7 @@ NEXT_PUBLIC_KEI_PROJECTS_URL=https://kei-projects-33b53.web.app/
 
 その後Vercel側のデプロイを更新します。Item Counterの接続キーやAPI URLは変更しません。
 
-MKW Course Statsの既存公開URL `https://mkw-trackstats.pages.dev/` は確認済みです。`public/projects-config.js` の `courseStatsUrl` に設定されています。元のD1データと管理者設定は変更しません。
+MKW Course Statsの既存公開URL `https://mkw-trackstats.pages.dev/` は確認済みです。`firebase.json` の `/stats` 転送先として設定されています。元のD1データと管理者設定は変更しません。
 
 ## 注意
 
@@ -64,4 +64,4 @@ MKW Course Statsの既存公開URL `https://mkw-trackstats.pages.dev/` は確認
 - 本番初回公開は2026-10-15に完了しました。新しい変更内容は手動のデプロイまで公開されません
 - プレビューとLiveの配信量は同じFirebase Hostingプロジェクトの無料枠を使用します
 - Hostingの無料枠を超えると制限される場合があります。課金を避けるにはSparkを維持し、利用量を確認してください
-- `/stats` はCourse Stats本体ではなく、検証済みCloudflare Pagesサイトへのクライアント側転送ページです
+- `/stats` はCourse Stats本体ではなく、検証済みCloudflare PagesサイトへのFirebase Hosting 302転送です。カードはJavaScriptなしで表示されます
