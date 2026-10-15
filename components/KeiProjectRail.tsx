@@ -12,6 +12,8 @@ type KeiProjectRailProps = {
 };
 
 const loungeCardsUrl = "https://kei-lounge-cards.vercel.app/";
+const projectsUrl = process.env.NEXT_PUBLIC_KEI_PROJECTS_URL?.trim();
+const courseStatsUrl = process.env.NEXT_PUBLIC_MKW_COURSE_STATS_URL?.trim();
 
 export default function KeiProjectRail(_props: KeiProjectRailProps) {
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -30,18 +32,44 @@ export default function KeiProjectRail(_props: KeiProjectRailProps) {
 
         {projectsOpen && (
           <div className={styles.projectPanel}>
+            {projectsUrl && (
+              <a className={styles.projectItem} href={projectsUrl}>
+                Kei Projects ホーム
+              </a>
+            )}
+
+            <Link className={styles.projectItem} href="/">
+              Kei BRSTM Hub
+            </Link>
+
             <a
               className={styles.projectItem}
               href={loungeCardsUrl}
               target="_blank"
               rel="noopener noreferrer"
             >
-              Kei Lounge Cards
+              Kei Lounge Card
             </a>
 
-            <Link className={styles.projectItem} href="/">
-              Kei Music Hub
-            </Link>
+            <a
+              className={styles.projectItem}
+              href={loungeCardsUrl + "item-counter"}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              MKW Item Counter
+            </a>
+
+            {courseStatsUrl && (
+              <a
+                className={styles.projectItem}
+                href={courseStatsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                MKW Course Stats
+              </a>
+            )}
           </div>
         )}
       </div>
