@@ -51,9 +51,9 @@ check("all four entry points are direct HTTPS redirects", () => {
 
 check("Course Stats card is visible without JavaScript", () => {
   assert.match(html, /id="stats-card" aria-labelledby="stats-title">/);
-  assert.match(html, /id="stats-link" href="\\/stats"/);
-  assert.doesNotMatch(html, /<script\\b/i);
-  assert.doesNotMatch(html, /hasumimihate\\.chatgpt\\.site/);
+  assert.match(html, /id="stats-link" href="\/stats"/);
+  assert.doesNotMatch(html, /<script\b/i);
+  assert.doesNotMatch(html, /hasumimihate\.chatgpt\.site/);
 });
 
 check("Firebase deployment remains manual and preview-first", () => {
@@ -69,7 +69,7 @@ check("Firebase deployment remains manual and preview-first", () => {
 });
 
 check("Spark-restricted executable files are not shipped", () => {
-  const restricted = /\\.(exe|dll|bat|apk|ipa)$/i;
+  const restricted = /\.(exe|dll|bat|apk|ipa)$/i;
   const walk = (path) => {
     for (const item of readdirSync(path, { withFileTypes: true })) {
       const fullPath = join(path, item.name);
