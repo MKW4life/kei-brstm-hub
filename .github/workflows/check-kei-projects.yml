@@ -1,0 +1,23 @@
+name: Check Kei Projects
+
+on:
+  pull_request:
+    paths:
+      - "kei-projects-site/**"
+      - ".github/workflows/check-kei-projects.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "kei-projects-site/**"
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Spark Hosting and portal links
+        run: node kei-projects-site/scripts/check.mjs
