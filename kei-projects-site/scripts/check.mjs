@@ -9,6 +9,8 @@ const read = (path) => readFileSync(join(projectRoot, path), "utf8");
 const html = read("public/index.html");
 const css = read("public/styles.css");
 const js = read("public/site.js");
+const statsJs = read("public/stats.js");
+const statsHtml = read("public/stats.html");
 const config = read("public/projects-config.js");
 const firebase = JSON.parse(read("firebase.json"));
 
@@ -46,7 +48,9 @@ check("existing service entry routes remain temporary HTTPS redirects", () => {
 
 check("unverified Course Stats destination is hidden by default", () => {
   assert.match(html, /id="stats-card"[^>]*hidden/);
-  assert.match(html, /id="stats-link"/);
+  assert.match(html, /id="stats-link" href="\/stats"/);
+  assert.match(statsHtml, /<title>MKW Course Stats/);
+  assert.match(statsHtml, /src="\/stats\.js"/);
   assert.match(css, /\.project-card\[hidden\]\s*\{\s*display:\s*none;/);
   assert.doesNotMatch(html, /hasumimihate\.chatgpt\.site/);
   assert.match(html, /projects-config\.js/);
@@ -68,7 +72,27 @@ check("Course Stats link only activates with a valid HTTPS URL", () => {
   assert.equal(mount("javascript:alert(1)").card.hidden, true);
   const { card, link } = mount("https://example.org/stats");
   assert.equal(card.hidden, false);
-  assert.equal(link.href, "https://example.org/stats");
+  assert.equal(link.href, "/stats");
+});
+
+check("the /stats route only redirects to an explicitly configured HTTPS site", () => {
+  function simulate(courseStatsUrl) {
+    const redirected = [];
+    const window = {
+      keiProjectsConfig: { courseStatsUrl },
+      location: {
+        origin: "https://kei-projects.web.app",
+        replace: (url) => redirected.push(url),
+      },
+    };
+    vm.runInNewContext(statsJs, { window, URL });
+    return redirected;
+  }
+  assert.deepEqual(simulate(""), []);
+  assert.deepEqual(simulate("javascript:alert(1)"), []);
+  assert.deepEqual(simulate("http://example.org/stats"), []);
+  assert.deepEqual(simulate("https://kei-projects.web.app/stats"), []);
+  assert.deepEqual(simulate("https://example.org/stats"), ["https://example.org/stats"]);
 });
 
 check("sample config contains no unverified URL", () => {
