@@ -13,7 +13,7 @@ npx firebase-tools login
 npx firebase-tools deploy --only hosting --project kei-projects-33b53
 ```
 
-Replace `YOUR_FIREBASE_PROJECT_ID` with the actual project ID. Firebase has **not** been deployed by this pull request.
+The Firebase portal is already live; use the manual GitHub Actions workflow for updates.
 
 Do not run `firebase init` over the existing `firebase.json` unless you intend to regenerate it.
 
@@ -29,14 +29,11 @@ Firebase Hosting uses **temporary 302 redirects** so the portal URLs can be reta
 
 These are redirects; the browser **leaves the Firebase origin**. Do not claim this is a single-domain runtime.
 
-MKW Course Stats is assigned the stable portal route `/stats`. Until its destination can be verified, **the Stats card is hidden**. `/stats` serves a simple back-navigation page when no destination is set.
+MKW Course Stats is already live at `https://mkw-trackstats.pages.dev/` with Cloudflare Pages and a D1 binding. The `/stats` portal route redirects to that existing application in the browser; its card is visible on the portal. Cloudflare and D1 remain unchanged.
 
-When a real MKW Course Stats deployment has been verified:
-1. Edit `public/projects-config.js` and set `courseStatsUrl` to that HTTPS URL.
-2. Run `node scripts/check.mjs` from `kei-projects-site/` before deployment.
-3. Deploy the static portal. Its Stats card will now appear and `/stats` will redirect to the configured URL.
+The verified Course Stats URL is set in `public/projects-config.js`. Run `node scripts/check.mjs` and deploy the portal when that URL needs updating.
 
-This is a client-side redirect, not a Firebase proxy or a copy of MKW Course Stats. Do not use an unverified legacy deployment URL. The source ZIP could not be inspected in the current environment, so the Course Stats application's original functionality has not yet been ported.
+This is a client-side redirect, not a Firebase proxy or a copy of MKW Course Stats. The original Cloudflare Pages Functions, D1 binding, admin secret, and historical data stay where they are.
 
 ## Validation
 
@@ -48,10 +45,10 @@ The pull request also has a GitHub Actions check. It does **not** deploy anythin
 
 After the Firebase URL is live, set **public, nonsecret** environment variables on both existing Vercel projects:
 
-- `NEXT_PUBLIC_KEI_PROJECTS_URL=https://YOUR_FIREBASE_PROJECT_ID.web.app/`
-- `NEXT_PUBLIC_MKW_COURSE_STATS_URL=...` (only if the Course Stats URL is confirmed)
+- `NEXT_PUBLIC_KEI_PROJECTS_URL=https://kei-projects-33b53.web.app/` (optional override)
+- `NEXT_PUBLIC_MKW_COURSE_STATS_URL=https://mkw-trackstats.pages.dev/` (optional override)
 
-The corresponding GitHub branches add these opt-in navigation links. Redeploy existing Next.js apps after updating public environment variables.
+The verified links are enabled by default in BRSTM Hub and Lounge Card. No Vercel variable is required; redeploy only if an override is changed.
 
 ## Compatibility and safety
 
@@ -66,13 +63,13 @@ The corresponding GitHub branches add these opt-in navigation links. Redeploy ex
 
 ## Release checklist
 
-- [ ] Keep the unverified MKW Course Stats card hidden.
+- [x] Verify live MKW Course Stats and enable its portal card.
 - [ ] Run `node scripts/check.mjs` and confirm GitHub Actions.
-- [ ] Verify the Course Stats deployment and update `public/projects-config.js` before enabling its card.
-- [ ] Review both draft PRs and confirm production apps remain unchanged.
-- [ ] Create a Spark project with billing **off**.
-- [ ] Publish the static portal.
+- [x] Set `public/projects-config.js` to the verified Cloudflare Pages destination.
+- [x] Review and merge original portal/navigation PRs.
+- [x] Create a Spark project with billing **off**.
+- [x] Publish the initial static portal.
 - [ ] Test `/music`, `/lounge`, `/lounge/item-counter` redirects.
 - [ ] Test Lounge Card and Item Counter OBS overlays and Windows hotkeys on their original URLs.
-- [ ] Set the opt-in `NEXT_PUBLIC_KEI_PROJECTS_URL` variable and redeploy both Vercel apps.
+- [x] Enable working portal links in BRSTM Hub and Lounge Card without extra variables.
 - [ ] Only after verification consider a separate same-origin migration plan.
