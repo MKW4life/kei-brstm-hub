@@ -54,7 +54,7 @@ check("existing service entry routes remain temporary HTTPS redirects", () => {
   }
 });
 
-check("unverified Course Stats destination is hidden by default", () => {
+check("Course Stats card is progressively revealed only after destination validation", () => {
   assert.match(html, /id="stats-card"[^>]*hidden/);
   assert.match(html, /id="stats-link" href="\/stats"/);
   assert.match(statsHtml, /<title>MKW Course Stats/);
@@ -103,10 +103,17 @@ check("the /stats route only redirects to an explicitly configured HTTPS site", 
   assert.deepEqual(simulate("https://example.org/stats"), ["https://example.org/stats"]);
 });
 
-check("sample config contains no unverified URL", () => {
+check("published config contains verified existing Course Stats URL", () => {
   const window = {};
   vm.runInNewContext(config, { window });
-  assert.equal(window.keiProjectsConfig.courseStatsUrl, "");
+  assert.equal(window.keiProjectsConfig.courseStatsUrl, "https://mkw-trackstats.pages.dev/");
+
+  const card = { hidden: true };
+  const link = { href: "#" };
+  const document = { getElementById: (id) => id === "stats-card" ? card : id === "stats-link" ? link : null };
+  vm.runInNewContext(js, { window, document, URL });
+  assert.equal(card.hidden, false);
+  assert.equal(link.href, "/stats");
 });
 
 check("Firebase deployment is opt-in and preview-first", () => {
