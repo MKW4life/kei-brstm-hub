@@ -23,8 +23,14 @@ const server = createServer(async (request, response) => {
     response.writeHead(400).end();
     return;
   }
-  const sitePath = pathname === "/" ? "index.html" :
-    pathname === "/stats" ? "stats.html" : pathname.replace(/^\/+/, "");
+  if (pathname === "/stats") {
+    response.writeHead(302, {
+      location: "https://mkw-trackstats.pages.dev/",
+      "cache-control": "no-store",
+    }).end();
+    return;
+  }
+  const sitePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const filename = resolve(publicDir, sitePath);
   if (!filename.startsWith(publicDir + sep)) {
     response.writeHead(403).end();
