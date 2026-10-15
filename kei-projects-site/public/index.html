@@ -7,6 +7,8 @@
   <meta name="description" content="Kei Projects">
   <title>Kei Projects</title>
   <link rel="stylesheet" href="./styles.css">
+  <script src="./projects-config.js"></script>
+  <script defer src="./site.js"></script>
 </head>
 <body>
   <div class="shell">
@@ -45,12 +47,12 @@
           </div>
         </section>
 
-        <section class="project-card" aria-labelledby="stats-title">
+        <section class="project-card" id="stats-card" aria-labelledby="stats-title" hidden>
           <span class="project-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V13M10 20V4M16 20v-9M22 20v-5M2 20h20"/></svg>
           </span>
           <h2 id="stats-title">MKW Course Stats</h2>
-          <a class="action" href="https://mkw-trackstats.hasumimihate.chatgpt.site/">
+          <a class="action" id="stats-link" href="#" aria-label="MKW Course Statsを開く">
             コース別成績を見る <span aria-hidden="true">↗</span>
           </a>
         </section>
