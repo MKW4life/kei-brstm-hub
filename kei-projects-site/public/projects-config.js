@@ -1,5 +1,5 @@
-// The Course Stats destination must be verified before publication.
-// An empty value hides the Course Stats card instead of showing a dead link.
+// Existing Cloudflare Pages deployment verified with live D1-backed results.
+// Keep Course Stats on its current origin; /stats is a portal redirect.
 window.keiProjectsConfig = Object.freeze({
-  courseStatsUrl: "",
+  courseStatsUrl: "https://mkw-trackstats.pages.dev/",
 });
