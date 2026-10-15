@@ -1,0 +1,43 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "cleanUrls": true,
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/music",
+        "destination": "https://kei-brstm-hub.vercel.app/",
+        "type": 302
+      },
+      {
+        "source": "/lounge",
+        "destination": "https://kei-lounge-cards.vercel.app/",
+        "type": 302
+      },
+      {
+        "source": "/lounge/item-counter",
+        "destination": "https://kei-lounge-cards.vercel.app/item-counter",
+        "type": 302
+      }
+    ]
+  }
+}

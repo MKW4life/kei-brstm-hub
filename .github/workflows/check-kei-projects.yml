@@ -1,0 +1,70 @@
+name: Check Kei Projects
+
+on:
+  pull_request:
+    paths:
+      - "kei-projects-site/**"
+      - "components/KeiProjectRail.tsx"
+      - "package*.json"
+      - ".github/workflows/check-kei-projects.yml"
+      - ".github/workflows/publish-kei-projects.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "kei-projects-site/**"
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Spark Hosting and portal links
+        run: node kei-projects-site/scripts/check.mjs
+
+  browser-validation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Chromium for UI smoke test
+        working-directory: kei-projects-site
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test desktop and mobile layouts
+        run: node kei-projects-site/scripts/browser-check.mjs
+      - name: Save UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kei-projects-ui-screenshots
+          path: kei-projects-site/artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+  nextjs-build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-nonsecret-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Verify types
+        run: npx tsc --noEmit
+      - name: Build Next.js app
+        run: npm run build

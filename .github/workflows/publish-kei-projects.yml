@@ -1,0 +1,95 @@
+name: Publish Kei Projects to Firebase Hosting
+
+# No automatic deployments. Requires an explicitly configured Firebase
+# Spark project and a GitHub secret. "preview" is the safe default.
+on:
+  workflow_dispatch:
+    inputs:
+      firebase_project_id:
+        description: "Firebase Spark project ID (not the display name)"
+        required: true
+        default: kei-projects-33b53
+        type: string
+      destination:
+        description: "Deployment destination"
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - live
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kei-projects-firebase-manual
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: firebase-kei-projects
+    env:
+      FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+      DESTINATION: ${{ inputs.destination }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Firebase project ID and service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$FIREBASE_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
+            echo "::error::Please enter a valid Firebase project ID."
+            exit 1
+          fi
+          if [[ "$FIREBASE_PROJECT_ID" != "kei-projects-33b53" ]]; then
+            echo "::error::This workflow is restricted to the approved Kei Projects Firebase project."
+            exit 1
+          fi
+          if [[ -z "$FIREBASE_SERVICE_ACCOUNT" ]]; then
+            echo "::error::GitHub secret FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS is not configured."
+            exit 1
+          fi
+          node -e '
+            try {
+              const credential = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+              if (credential.project_id !== process.env.FIREBASE_PROJECT_ID) {
+                console.error("::error::Firebase credential project ID does not match the selected project.");
+                process.exit(1);
+              }
+            } catch {
+              console.error("::error::The Firebase service account secret is not valid JSON.");
+              process.exit(1);
+            }
+          '
+          if [[ "$DESTINATION" != "preview" && "$DESTINATION" != "live" ]]; then
+            echo "::error::Only preview and live are supported."
+            exit 1
+          fi
+
+      - name: Validate Spark-only Hosting configuration
+        run: node kei-projects-site/scripts/check.mjs
+
+      - name: Publish preview
+        if: ${{ inputs.destination == 'preview' }}
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS }}
+          projectId: ${{ inputs.firebase_project_id }}
+          channelId: kei-projects-preview
+          expires: 7d
+          entryPoint: kei-projects-site
+
+      - name: Publish live
+        if: ${{ inputs.destination == 'live' }}
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEI_PROJECTS }}
+          projectId: ${{ inputs.firebase_project_id }}
+          channelId: live
+          entryPoint: kei-projects-site
