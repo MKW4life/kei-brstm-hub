@@ -12,7 +12,7 @@ type KeiProjectRailProps = {
 };
 
 const loungeCardsUrl = "https://kei-lounge-cards.vercel.app/";
-const projectsUrl = process.env.NEXT_PUBLIC_KEI_PROJECTS_URL?.trim();
+const projectsUrl = process.env.NEXT_PUBLIC_KEI_PROJECTS_URL?.trim() || "https://kei-projects-33b53.web.app/";
 const courseStatsUrl = process.env.NEXT_PUBLIC_MKW_COURSE_STATS_URL?.trim();
 
 export default function KeiProjectRail(_props: KeiProjectRailProps) {
