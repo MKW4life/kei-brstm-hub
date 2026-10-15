@@ -21,6 +21,23 @@
           }
         ]
       }
+    ],
+    "redirects": [
+      {
+        "source": "/music",
+        "destination": "https://kei-brstm-hub.vercel.app/",
+        "type": 302
+      },
+      {
+        "source": "/lounge",
+        "destination": "https://kei-lounge-cards.vercel.app/",
+        "type": 302
+      },
+      {
+        "source": "/lounge/item-counter",
+        "destination": "https://kei-lounge-cards.vercel.app/item-counter",
+        "type": 302
+      }
     ]
   }
 }
