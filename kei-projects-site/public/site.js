@@ -8,7 +8,7 @@ if (statsCard && statsLink && typeof configuredUrl === "string" && configuredUrl
   try {
     const destination = new URL(configuredUrl);
     if (destination.protocol === "https:") {
-      statsLink.href = destination.href;
+      statsLink.href = "/stats";
       statsCard.hidden = false;
     }
   } catch {
