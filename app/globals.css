@@ -942,3 +942,28 @@ a {
   color: #a1a1aa;
   font-size: 11px;
 }
+
+.bulkDuplicateLoopInfo {
+  color: #a1a1aa;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.adminDuplicateReviewMatch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.035);
+}
+.adminDuplicateReviewMatchInfo {
+  display: grid;
+  flex: 1 1 230px;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.adminDuplicateReviewMatch .adminBulkPreviewButton {
+  margin-left: auto;
+}
