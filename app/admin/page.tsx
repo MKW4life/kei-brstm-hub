@@ -68,6 +68,8 @@ type BulkTitleSuggestion = {
   trackId?: number;
   previewUrl?: string;
   previewLap3Url?: string;
+  loopType?: string;
+  hasLap3Brstm?: boolean;
 };
 
 /** Preview availability follows the assigned file roles, not the original file names. */
@@ -97,6 +99,8 @@ type DuplicateMatch = {
   title: string;
   titleEn: string;
   score: number;
+  loopType: string;
+  hasLap3Brstm: boolean;
 };
 
 type DuplicateReviewItem = {
@@ -490,6 +494,8 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
         trackId: track.id,
         previewUrl: track.preview_url || "",
         previewLap3Url: track.preview_lap3_url || "",
+        loopType: track.loop_type,
+        hasLap3Brstm: Boolean(track.brstm_lap3_url),
       });
     }
   }
@@ -1719,6 +1725,8 @@ export default function AdminPage() {
             title: track.title,
             titleEn: track.title_en || track.title,
             score: bestScore,
+            loopType: track.loop_type,
+            hasLap3Brstm: Boolean(track.brstm_lap3_url),
           };
         })
         .filter((match) => match.score >= 0.82)
@@ -1735,6 +1743,100 @@ export default function AdminPage() {
     }
 
     return reviewItems;
+  }
+
+  async function handleReplaceBulkGroup(groupKey: string, trackId: number) {
+    if (bulkUploading) return;
+    const group = bulkGroups.find((item) => item.key === groupKey);
+    const existing = tracks.find((track) => track.id === trackId);
+    if (!group || !existing || group.status === "done") {
+      setMessage("置き換え対象が見つかりません。");
+      return;
+    }
+
+    const fileSlots = [
+      { role: "normalBrstm", column: "brstm_url", bucket: "brstm-files" },
+      { role: "normalPreview", column: "preview_url", bucket: "previews" },
+      { role: "lap3Brstm", column: "brstm_lap3_url", bucket: "brstm-files" },
+      { role: "lap3Preview", column: "preview_lap3_url", bucket: "previews" },
+    ] as const;
+    const replacements = fileSlots.flatMap((slot) => {
+      const file = group.files.find((item) => item.role === slot.role);
+      return file ? [{ ...slot, file: file.file }] : [];
+    });
+    if (!replacements.some((item) => item.role === "normalBrstm")) {
+      setMessage("通常BRSTMを選択してください。");
+      return;
+    }
+
+    const updatedFields = replacements.map((item) =>
+      item.role === "normalBrstm" ? "通常BRSTM" :
+      item.role === "normalPreview" ? "通常MP3" :
+      item.role === "lap3Brstm" ? "Lap 3 BRSTM" : "Lap 3 MP3"
+    ).join("・");
+    const confirmed = window.confirm(
+      `「${existing.title}」を待機中の「${group.title}」のファイルで置き換えますか？\n\n` +
+      `更新するファイル：${updatedFields}\n` +
+      `ループ：${getLoopValue(existing.loop_type)} → ${getLoopValue(group.loopType)}\n\n` +
+      "既存曲のID・曲名・タグ・公開状態と、未選択の音声ファイルは維持します。" +
+      "置き換えた古いファイルは削除され、元に戻せません。"
+    );
+    if (!confirmed) return;
+
+    setBulkUploading(true);
+    updateBulkGroup(groupKey, { status: "uploading" });
+    setMessage(`${existing.title} を置き換え中...`);
+
+    const newUploads: Array<[string, string]> = [];
+    const oldFiles: Array<[string, string]> = [];
+    let saved = false;
+
+    try {
+      // Re-fetch the current DB row; the candidate list may be stale.
+      const { data: latest, error: fetchError } = await supabase
+        .from("tracks")
+        .select("id, title, loop_type, brstm_url, preview_url, brstm_lap3_url, preview_lap3_url")
+        .eq("id", trackId)
+        .single();
+      if (fetchError || !latest) throw fetchError ?? new Error("置き換え先が見つかりません。");
+
+      const updateData: Record<string, string> = { loop_type: group.loopType };
+      for (const slot of replacements) {
+        const nextUrl = await uploadFile(slot.bucket, slot.file);
+        newUploads.push([slot.bucket, nextUrl]);
+        updateData[slot.column] = nextUrl;
+        const oldUrl = latest[slot.column];
+        if (oldUrl && oldUrl !== nextUrl) oldFiles.push([slot.bucket, oldUrl]);
+      }
+
+      const { data: updated, error: saveError } = await supabase
+        .from("tracks")
+        .update(updateData)
+        .eq("id", trackId)
+        .select("id")
+        .single();
+      if (saveError || !updated) throw saveError ?? new Error("既存曲を更新できませんでした。");
+      saved = true;
+
+      // Delete old blobs only after the replacement has been committed.
+      await Promise.all(oldFiles.map(([bucket, url]) => removeStorageFile(bucket, url)));
+      updateBulkGroup(groupKey, { status: "done" });
+      setDuplicateReview((current) => current.filter((item) => item.groupKey !== groupKey));
+      setPendingUploadGroupKeys((current) => current.filter((key) => key !== groupKey));
+      setDuplicateSkippedGroupKeys((current) => current.filter((key) => key !== groupKey));
+      if (duplicateReview.length <= 1) setShowDuplicateReview(false);
+      setMessage(`${existing.title} を置き換えました。`);
+      await loadTracks();
+    } catch (error) {
+      console.error("Replace existing track failed:", error);
+      if (!saved) {
+        await Promise.all(newUploads.map(([bucket, url]) => removeStorageFile(bucket, url)));
+      }
+      updateBulkGroup(groupKey, { status: "error" });
+      setMessage(`${existing.title} の置き換えに失敗しました。`);
+    } finally {
+      setBulkUploading(false);
+    }
   }
 
   async function executeBulkUpload(
