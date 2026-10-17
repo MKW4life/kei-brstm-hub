@@ -101,6 +101,8 @@ type DuplicateMatch = {
   score: number;
   loopType: string;
   hasLap3Brstm: boolean;
+  previewUrl: string;
+  previewLap3Url: string;
 };
 
 type DuplicateReviewItem = {
@@ -1793,6 +1795,8 @@ export default function AdminPage() {
             score: bestScore,
             loopType: track.loop_type,
             hasLap3Brstm: Boolean(track.brstm_lap3_url),
+            previewUrl: track.preview_url || "",
+            previewLap3Url: track.preview_lap3_url || "",
           };
         })
         .filter((match) => match.score >= 0.82)
@@ -1849,6 +1853,7 @@ export default function AdminPage() {
     );
     if (!confirmed) return;
 
+    stopAdminAudio();
     setBulkUploading(true);
     updateBulkGroup(groupKey, { status: "uploading" });
     setMessage(`${existing.title} を置き換え中...`);
@@ -2025,6 +2030,7 @@ export default function AdminPage() {
     const duplicates = findPublishedDuplicateCandidates(validGroups);
 
     if (duplicates.length > 0) {
+      stopAdminAudio();
       setDuplicateReview(duplicates);
       setDuplicateSkippedGroupKeys([]);
       setShowDuplicateReview(true);
@@ -2075,6 +2081,7 @@ export default function AdminPage() {
     const skipped = new Set<string>(duplicateSkippedGroupKeys);
     const targets = new Set<string>(pendingUploadGroupKeys);
 
+    stopAdminAudio();
     setShowDuplicateReview(false);
     await executeBulkUpload(skipped, targets);
     setPendingUploadGroupKeys([]);
@@ -3735,6 +3742,34 @@ export default function AdminPage() {
                     新規: {item.incomingTitle}
                   </div>
 
+                  {(() => {
+                    const group = bulkGroups.find((candidate) => candidate.key === item.groupKey);
+                    const pendingMp3s = group?.files.filter((file) =>
+                      file.extension === "mp3" &&
+                      (file.role === "normalPreview" || file.role === "lap3Preview")
+                    ) ?? [];
+                    return (
+                      <div className="adminDuplicateReviewPreviewRow">
+                        <span className="adminDuplicateReviewPreviewLabel">新規MP3</span>
+                        {pendingMp3s.length > 0 ? pendingMp3s.map((file) => (
+                          <button
+                            key={file.id}
+                            className="secondaryButton adminBulkPreviewButton"
+                            type="button"
+                            onClick={() => handleQueuedMp3Preview(file)}
+                            title={file.name}
+                          >
+                            {adminPlayingKey === `upload-file-${file.id}`
+                              ? "■ 停止"
+                              : file.role === "lap3Preview" ? "▶ L3" : "▶ 通常"}
+                          </button>
+                        )) : (
+                          <span className="bulkDuplicateNoPreview">MP3未選択</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <div style={{ display: "grid", gap: "6px" }}>
                     {item.matches.map((match) => (
                       <div
@@ -3754,6 +3789,32 @@ export default function AdminPage() {
                               return waiting ? ` / 新規 ${getLoopValue(waiting.loopType)}` : "";
                             })()}
                           </span>
+                          <div className="adminDuplicateReviewPreviewRow">
+                            <span className="adminDuplicateReviewPreviewLabel">既存MP3</span>
+                            {match.previewUrl && (
+                              <button
+                                className="secondaryButton adminBulkPreviewButton"
+                                type="button"
+                                onClick={() => void playAdminAudio(`duplicate-${match.id}-normal`, match.previewUrl)}
+                                title="登録済みの通常MP3を試聴"
+                              >
+                                {adminPlayingKey === `duplicate-${match.id}-normal` ? "■ 停止" : "▶ 通常"}
+                              </button>
+                            )}
+                            {match.previewLap3Url && (
+                              <button
+                                className="secondaryButton adminBulkPreviewButton"
+                                type="button"
+                                onClick={() => void playAdminAudio(`duplicate-${match.id}-lap3`, match.previewLap3Url)}
+                                title="登録済みのLap 3 MP3を試聴"
+                              >
+                                {adminPlayingKey === `duplicate-${match.id}-lap3` ? "■ 停止" : "▶ L3"}
+                              </button>
+                            )}
+                            {!match.previewUrl && !match.previewLap3Url && (
+                              <span className="bulkDuplicateNoPreview">MP3未登録</span>
+                            )}
+                          </div>
                         </div>
                         <strong style={{ whiteSpace: "nowrap" }}>
                           {Math.round(match.score * 100)}%
@@ -3812,6 +3873,7 @@ export default function AdminPage() {
                 className="secondaryButton"
                 type="button"
                 onClick={() => {
+                  stopAdminAudio();
                   setShowDuplicateReview(false);
                   setPendingUploadGroupKeys([]);
                 }}
