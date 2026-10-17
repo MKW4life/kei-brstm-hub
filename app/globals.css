@@ -669,3 +669,123 @@ a {
   font-weight: 650;
   vertical-align: middle;
 }
+
+
+/* Admin workspace: compact section navigation, collapsible panels and preview repair list. */
+.adminSectionNav {
+  position: sticky;
+  top: 8px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 22px 0 0;
+  padding: 10px;
+  border: 1px solid #29292e;
+  border-radius: 13px;
+  background: rgba(12,12,15,.95);
+  box-shadow: 0 8px 26px rgba(0,0,0,.3);
+  backdrop-filter: blur(12px);
+}
+.adminSectionNav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 33px;
+  padding: 6px 11px;
+  border: 1px solid #303037;
+  border-radius: 8px;
+  background: #19191e;
+  color: #e9e9ef;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 650;
+}
+.adminSectionNav a:hover,
+.adminSectionNav a:focus-visible {
+  border-color: #70707b;
+  background: #24242b;
+}
+.adminCollapsiblePanel {
+  scroll-margin-top: 90px;
+}
+.adminCollapsiblePanel .adminSectionSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  list-style: none;
+  cursor: pointer;
+}
+.adminCollapsiblePanel .adminSectionSummary::-webkit-details-marker { display: none; }
+.adminCollapsiblePanel .adminSectionSummary:focus-visible {
+  outline: 2px solid #aaaab7;
+  outline-offset: 5px;
+  border-radius: 5px;
+}
+.adminSectionSummaryTitle { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.adminSectionSummaryTitle .label { margin: 0; font-size: 10px; letter-spacing: .17em; }
+.adminSectionSummaryTitle .adminTitle,
+.adminSectionSummaryTitle .adminSubTitle { margin: 0; line-height: 1.2; }
+.adminSectionCount {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 2px 9px;
+  border: 1px solid rgba(255,192,94,.25);
+  border-radius: 99px;
+  background: rgba(255,192,94,.06);
+  color: #ffce8c;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.adminSectionChevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-right: 2px solid #c1c1cb;
+  border-bottom: 2px solid #c1c1cb;
+  transform: rotate(45deg);
+  transition: transform .15s ease;
+}
+.adminCollapsiblePanel[open] .adminSectionChevron { transform: rotate(225deg); }
+.adminSectionBody { padding-top: 20px; }
+.adminMissingPreviewSearch { margin: 0 0 15px; }
+.adminMissingPreviewList { display: flex; flex-direction: column; gap: 9px; }
+.adminMissingPreviewRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid #29292f;
+  border-radius: 11px;
+  background: #101014;
+}
+.adminMissingPreviewInfo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.adminMissingPreviewInfo strong { font-size: 14px; overflow-wrap: anywhere; }
+.adminMissingPreviewInfo small { font-size: 11px; color: #a1a1aa; overflow-wrap: anywhere; }
+.adminMissingPreviewStatus { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.adminMissingPreviewTag {
+  padding: 4px 7px;
+  border: 1px solid rgba(255,192,94,.24);
+  border-radius: 6px;
+  color: #ffd18b;
+  background: rgba(255,192,94,.06);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.adminMissingPreviewRow > button { flex: 0 0 auto; }
+.adminMissingPreviewMore { margin-top: 12px; }
+.adminTrackCard[id] { scroll-margin-top: 100px; }
+@media (max-width: 700px) {
+  .adminSectionNav { top: 0; gap: 5px; padding: 8px; }
+  .adminSectionNav a { padding: 6px 8px; min-height: 30px; font-size: 11px; }
+  .adminSectionSummaryTitle .adminTitle { font-size: 26px; }
+  .adminSectionSummaryTitle .adminSubTitle { font-size: 19px; }
+  .adminMissingPreviewRow { flex-direction: column; align-items: stretch; gap: 10px; }
+  .adminMissingPreviewRow > button { align-self: flex-start; }
+}
