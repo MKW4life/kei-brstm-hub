@@ -3126,7 +3126,7 @@ export default function AdminPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gridTemplateColumns: "minmax(0, 1fr)",
                 gap: "8px",
               }}
             >
