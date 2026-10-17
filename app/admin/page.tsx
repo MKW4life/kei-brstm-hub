@@ -452,8 +452,11 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
     suggestions.push(candidate);
   };
 
-  for (const name of names) {
-    const pair = extractBilingualFilenameTitle(name);
+  const primaryFiles = group.files.filter((item) => item.role === "normalBrstm");
+  for (const file of primaryFiles.length > 0 ? primaryFiles : group.files) {
+    // Inspect raw filenames so a bilingual " - " separator is not lost
+    // to grouping normalization.
+    const pair = extractBilingualFilenameTitle(stripExtension(file.name));
     if (pair) {
       add({ ...pair, source: "filename", score: 1 });
     }
