@@ -398,7 +398,11 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
 
 const japaneseCharacters = /[\u3040-\u30ff\u3400-\u9fff]/u;
 const latinCharacters = /[A-Za-z]/;
-const soundtrackLabel = /\b(?:ost|bgm|soundtrack|original soundtrack|music|loop|lap ?3)\b/i;
+const soundtrackLabel = /\b(?:ost|bgm|soundtrack|remix|version|instrumental|cover|karaoke|loop|lap ?3)\b/i;
+
+function removeSoundtrackSuffix(value: string) {
+  return value.replace(/\s*[[(（【][^\])）】]*(?:OST|BGM|soundtrack)[^\])）】]*[\])）】]\s*$/i, "").trim();
+}
 
 /** Only accept bilingual segments when the script boundary is unambiguous. */
 function extractBilingualFilenameTitle(value: string) {
@@ -432,9 +436,10 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
     ...group.files,
   ];
   const names = Array.from(new Set(
-    sourceFiles.map((item) =>
-      cleanBaseName(removeExplicitLap3Marker(stripExtension(item.name)).baseName)
-    ).filter(Boolean)
+    sourceFiles.flatMap((item) => {
+      const stem = cleanBaseName(removeExplicitLap3Marker(stripExtension(item.name)).baseName);
+      return [stem, removeSoundtrackSuffix(stem)];
+    }).filter(Boolean)
   ));
   const suggestions: BulkTitleSuggestion[] = [];
   const add = (candidate: BulkTitleSuggestion) => {
