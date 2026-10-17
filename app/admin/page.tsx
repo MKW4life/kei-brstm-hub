@@ -476,14 +476,15 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
   }
 
   for (const track of tracks) {
-    if (!track.title?.trim() || !track.title_en?.trim()) continue;
+    if (!track.title?.trim()) continue;
+    const knownNames = [track.title, track.title_en].filter(Boolean);
     const matchedScore = Math.max(0, ...names.flatMap((name) =>
-      [track.title, track.title_en].map((known) => titleSimilarity(name, known))
+      knownNames.map((known) => titleSimilarity(name, known))
     ));
     if (matchedScore >= 0.88) {
       add({
         title: track.title.trim(),
-        titleEn: track.title_en.trim(),
+        titleEn: track.title_en?.trim() || track.title.trim(),
         source: "registered",
         score: matchedScore,
         trackId: track.id,
@@ -872,7 +873,13 @@ export default function AdminPage() {
     } catch (error) {
       // Check Audio identity, not just the key: the same button may have
       // been started again before an older play() promise settles.
-      if (adminAudioRef.current !== audio || !audio) {
+      if (!audio) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        console.error("Admin preview initialization failed:", error);
+        setMessage("プレビューを再生できませんでした。");
+        return;
+      }
+      if (adminAudioRef.current !== audio) {
         if (objectUrl && adminObjectUrlRef.current !== objectUrl) URL.revokeObjectURL(objectUrl);
         return;
       }
