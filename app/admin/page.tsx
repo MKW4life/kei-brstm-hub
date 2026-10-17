@@ -721,6 +721,57 @@ export default function AdminPage() {
       .map((item) => item.label);
   }, [tracks, packs]);
 
+  const tagCompanions = useMemo(() => {
+    const pairs = new Map<string, Map<string, number>>();
+    const names = new Map(
+      tagPickerSuggestions.map((tag) => [
+        tagAliasMap.get(tag.toLowerCase()) ?? tag.toLowerCase(),
+        tag,
+      ])
+    );
+
+    for (const entry of [...tracks, ...packs]) {
+      const keys = [...new Set(splitTagList(entry.tags || "")
+        .map((tag) => tagAliasMap.get(tag.toLowerCase()) ?? tag.toLowerCase())
+        .filter((key) => key !== "no tag"))];
+
+      // Each track/pack counts only once for each pair of tags.
+      for (const base of keys) {
+        const related = pairs.get(base) ?? new Map<string, number>();
+        for (const candidate of keys) {
+          if (candidate === base) continue;
+          related.set(candidate, (related.get(candidate) ?? 0) + 1);
+        }
+        pairs.set(base, related);
+      }
+    }
+
+    return { pairs, names };
+  }, [tracks, packs, tagPickerSuggestions, tagAliasMap]);
+
+  const bulkRelatedTagSuggestions = useMemo(() => new Map(
+    bulkGroups.map((group) => {
+      const selected = new Set(
+        splitTagList(group.tags)
+          .map((tag) => tagAliasMap.get(tag.toLowerCase()) ?? tag.toLowerCase())
+          .filter((tag) => tag !== "no tag")
+      );
+      const scores = new Map<string, number>();
+      for (const tag of selected) {
+        for (const [candidate, count] of tagCompanions.pairs.get(tag) ?? []) {
+          if (selected.has(candidate)) continue;
+          scores.set(candidate, (scores.get(candidate) ?? 0) + count);
+        }
+      }
+      const related = [...scores]
+        .sort((a, b) => b[1] - a[1] ||
+          (tagCompanions.names.get(a[0]) ?? a[0]).localeCompare(tagCompanions.names.get(b[0]) ?? b[0]))
+        .slice(0, 6)
+        .map(([tag]) => tagCompanions.names.get(tag) ?? tag);
+      return [group.key, related] as const;
+    })
+  ), [bulkGroups, tagCompanions, tagAliasMap]);
+
   const adminTrackMatches = useMemo(() => {
     const keyword = adminTrackQuery
       .trim()
@@ -1682,11 +1733,9 @@ export default function AdminPage() {
       current.map((group) => {
         if (group.key !== key) return group;
 
-        const existing = group.tags
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean);
-
+        const existing = splitTagList(group.tags).filter(
+          (item) => item.toLowerCase() !== "no tag"
+        );
         if (existing.some((item) => item.toLowerCase() === tag.toLowerCase())) {
           return group;
         }
@@ -2594,11 +2643,33 @@ export default function AdminPage() {
                       <AdminTagPicker
                         label="タグ"
                         value={group.tags}
-                        onChange={(nextTags) =>
-                          updateBulkGroup(group.key, { tags: nextTags })
-                        }
+                        onChange={(nextTags) => {
+                          const tags = splitTagList(nextTags);
+                          const selected = tags.length > 1
+                            ? tags.filter((tag) => tag.toLowerCase() !== "no tag")
+                            : tags;
+                          updateBulkGroup(group.key, {
+                            tags: selected.length ? selected.join(", ") : "No tag",
+                          });
+                        }}
                         suggestions={tagPickerSuggestions}
                       />
+
+                      {(bulkRelatedTagSuggestions.get(group.key)?.length ?? 0) > 0 && (
+                        <div className="adminBulkRelatedTags">
+                          <span className="bulkTitleSuggestionHeading">一緒に使われるタグ</span>
+                          {bulkRelatedTagSuggestions.get(group.key)?.map((tag) => (
+                            <button
+                              type="button"
+                              className="secondaryButton adminBulkRelatedTag"
+                              key={tag}
+                              onClick={() => addSuggestedTagToGroup(group.key, tag)}
+                            >
+                              + #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {getMissingBulkPreviews(group).length > 0 && (
                         <div className="previewMissingNotice" role="status">
