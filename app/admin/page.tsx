@@ -261,6 +261,38 @@ function removeExplicitLap3Marker(stem: string) {
   };
 }
 
+/**
+ * Nintendo/Wii BRSTM name pairs like n_circuit32_n (5) and
+ * n_circuit32_f (5) describe the same song: n = normal, f = final lap.
+ * Do not strip a lone _n/_f marker without its counterpart in the selection.
+ */
+function getNormalFinalPair(stem: string, names: Set<string>) {
+  const matched = stem.match(/^(.+)_([nf])(\s*\(\d+\))?$/i);
+  if (!matched) return null;
+
+  const [, name, variant, suffix = ""] = matched;
+  const counterpart = `${name}_${variant.toLowerCase() === "f" ? "n" : "f"}${suffix}`;
+  if (!names.has(normalizeCompareName(counterpart))) return null;
+
+  return {
+    baseName: cleanBaseName(`${name}${suffix}`),
+    isLap3: variant.toLowerCase() === "f",
+  };
+}
+
+/** BRSTM and MP3 with the same stem move, split and change role together. */
+function hasSameBulkStem(a: BulkGroupFile, b: BulkGroupFile) {
+  return normalizeCompareName(stripExtension(a.name)) ===
+    normalizeCompareName(stripExtension(b.name));
+}
+
+function bulkRoleByExtension(role: BulkRole, extension: BulkGroupFile["extension"]): BulkRole {
+  if (role === "ignore") return "ignore";
+  const isLap3 = role === "lap3Brstm" || role === "lap3Preview";
+  if (extension === "brstm") return isLap3 ? "lap3Brstm" : "normalBrstm";
+  return isLap3 ? "lap3Preview" : "normalPreview";
+}
+
 function buildBulkGroups(files: File[]): BulkGroup[] {
   const usableFiles = files
     .map((file, index) => {
@@ -282,6 +314,13 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
   );
 
   const prepared = usableFiles.map((item) => {
+    // Treat _n and _f as a single track only if both filename variants
+    // exist, including matching numeric suffixes such as " (5)".
+    const normalFinalPair = getNormalFinalPair(item.stem, knownNames);
+    if (normalFinalPair) {
+      return { ...item, ...normalFinalPair };
+    }
+
     // First handle explicit Lap 3 markers such as "_lap3" or " final".
     const explicit = removeExplicitLap3Marker(item.stem);
 
@@ -1264,16 +1303,20 @@ export default function AdminPage() {
     role: BulkRole
   ) {
     setBulkGroups((current) =>
-      current.map((group) =>
-        group.key !== groupKey
-          ? group
-          : {
-              ...group,
-              files: group.files.map((item) =>
-                item.id === fileId ? { ...item, role } : item
-              ),
-            }
-      )
+      current.map((group) => {
+        if (group.key !== groupKey || group.status === "done") return group;
+        const chosen = group.files.find((item) => item.id === fileId);
+        if (!chosen) return group;
+
+        return {
+          ...group,
+          files: group.files.map((item) =>
+            hasSameBulkStem(item, chosen)
+              ? { ...item, role: bulkRoleByExtension(role, item.extension) }
+              : item
+          ),
+        };
+      })
     );
   }
 
@@ -1291,31 +1334,31 @@ export default function AdminPage() {
       if (!source || !target) return current;
 
       const movingFile = source.files.find((item) => item.id === fileId);
-      if (!movingFile) return current;
+      if (!movingFile || source.status === "done" || target.status === "done") return current;
+
+      const pairedFiles = source.files.filter((item) => hasSameBulkStem(item, movingFile));
+      const pairedIds = new Set(pairedFiles.map((item) => item.id));
 
       const next = current
         .map((group) => {
           if (group.key === sourceGroupKey) {
             return {
               ...group,
-              files: group.files.filter((item) => item.id !== fileId),
+              files: group.files.filter((item) => !pairedIds.has(item.id)),
             };
           }
 
           if (group.key === targetGroupKey) {
-            const movedRole: BulkRole =
-              movingFile.extension === "brstm"
-                ? "lap3Brstm"
-                : "lap3Preview";
-
+            // Moving to another song has always assigned Lap 3; apply it
+            // consistently to the BRSTM and MP3 of the same filename.
             return {
               ...group,
               files: [
                 ...group.files,
-                {
-                  ...movingFile,
-                  role: movedRole,
-                },
+                ...pairedFiles.map((item) => ({
+                  ...item,
+                  role: bulkRoleByExtension("lap3Brstm", item.extension),
+                })),
               ],
             };
           }
@@ -1336,10 +1379,8 @@ export default function AdminPage() {
       const selected = source.files.find((item) => item.id === fileId);
       if (!selected) return current;
 
-      const selectedStem = normalizeCompareName(stripExtension(selected.name));
       const filesToSplit = source.files.filter(
-        (item) =>
-          normalizeCompareName(stripExtension(item.name)) === selectedStem
+        (item) => hasSameBulkStem(item, selected)
       );
 
       if (filesToSplit.length === 0) return current;
@@ -2715,6 +2756,11 @@ export default function AdminPage() {
                               <div style={{ fontSize: "11px", opacity: 0.55 }}>
                                 {item.extension.toUpperCase()} / 現在:{" "}
                                 {getRoleLabel(item.role)}
+                                {group.files.some((paired) =>
+                                  paired.id !== item.id &&
+                                  paired.extension !== item.extension &&
+                                  hasSameBulkStem(paired, item)
+                                ) && " / BRSTM・MP3連動"}
                               </div>
 
                               <div className="adminBulkFileActions">
@@ -2747,6 +2793,8 @@ export default function AdminPage() {
                               <select
                                 className="formInput"
                                 value={group.key}
+                                disabled={bulkUploading || group.status === "done"}
+                                title="同じファイル名のBRSTM・MP3もまとめて移動"
                                 onChange={(event) =>
                                   moveBulkFile(
                                     group.key,
@@ -2771,6 +2819,8 @@ export default function AdminPage() {
                               <select
                                 className="formInput"
                                 value={item.role}
+                                disabled={bulkUploading || group.status === "done"}
+                                title="同じファイル名のBRSTM・MP3の役割をまとめて変更"
                                 onChange={(event) =>
                                   updateBulkFileRole(
                                     group.key,
@@ -2779,10 +2829,17 @@ export default function AdminPage() {
                                   )
                                 }
                               >
-                                <option value="normalBrstm">通常BRSTM</option>
-                                <option value="lap3Brstm">Lap 3 BRSTM</option>
-                                <option value="normalPreview">通常MP3</option>
-                                <option value="lap3Preview">Lap 3 MP3</option>
+                                {item.extension === "brstm" ? (
+                                  <>
+                                    <option value="normalBrstm">通常BRSTM</option>
+                                    <option value="lap3Brstm">Lap 3 BRSTM</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="normalPreview">通常MP3</option>
+                                    <option value="lap3Preview">Lap 3 MP3</option>
+                                  </>
+                                )}
                                 <option value="ignore">アップロードしない</option>
                               </select>
                             </label>
