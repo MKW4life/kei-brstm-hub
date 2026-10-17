@@ -2756,6 +2756,11 @@ export default function AdminPage() {
                               <div style={{ fontSize: "11px", opacity: 0.55 }}>
                                 {item.extension.toUpperCase()} / 現在:{" "}
                                 {getRoleLabel(item.role)}
+                                {group.files.some((paired) =>
+                                  paired.id !== item.id &&
+                                  paired.extension !== item.extension &&
+                                  hasSameBulkStem(paired, item)
+                                ) && " / BRSTM・MP3連動"}
                               </div>
 
                               <div className="adminBulkFileActions">
@@ -2788,6 +2793,8 @@ export default function AdminPage() {
                               <select
                                 className="formInput"
                                 value={group.key}
+                                disabled={bulkUploading || group.status === "done"}
+                                title="同じファイル名のBRSTM・MP3もまとめて移動"
                                 onChange={(event) =>
                                   moveBulkFile(
                                     group.key,
@@ -2812,6 +2819,8 @@ export default function AdminPage() {
                               <select
                                 className="formInput"
                                 value={item.role}
+                                disabled={bulkUploading || group.status === "done"}
+                                title="同じファイル名のBRSTM・MP3の役割をまとめて変更"
                                 onChange={(event) =>
                                   updateBulkFileRole(
                                     group.key,
@@ -2820,10 +2829,17 @@ export default function AdminPage() {
                                   )
                                 }
                               >
-                                <option value="normalBrstm">通常BRSTM</option>
-                                <option value="lap3Brstm">Lap 3 BRSTM</option>
-                                <option value="normalPreview">通常MP3</option>
-                                <option value="lap3Preview">Lap 3 MP3</option>
+                                {item.extension === "brstm" ? (
+                                  <>
+                                    <option value="normalBrstm">通常BRSTM</option>
+                                    <option value="lap3Brstm">Lap 3 BRSTM</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="normalPreview">通常MP3</option>
+                                    <option value="lap3Preview">Lap 3 MP3</option>
+                                  </>
+                                )}
                                 <option value="ignore">アップロードしない</option>
                               </select>
                             </label>
