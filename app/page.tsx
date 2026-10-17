@@ -219,6 +219,7 @@ export default function Home() {
   const [volume, setVolume] = useState(0.25);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playingKeyRef = useRef<string | null>(null);
   const t = translations[language];
 
   useEffect(() => {
@@ -521,42 +522,52 @@ export default function Home() {
     }
 
     const key = `${track.id}-${label}`;
+    const previousAudio = audioRef.current;
+    const wasSamePreview = playingKeyRef.current === key && previousAudio !== null;
 
-    if (playingKey === key && audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-      setPlayingKey(null);
-      return;
+    // Stop the old audio before creating a new one. Disown it first so late
+    // ended/error/play() callbacks never reset the new preview.
+    audioRef.current = null;
+    playingKeyRef.current = null;
+    if (previousAudio) {
+      previousAudio.pause();
+      previousAudio.currentTime = 0;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+    if (wasSamePreview) {
+      setPlayingKey(null);
+      return;
     }
 
     const nextAudio = new Audio(previewUrl);
     nextAudio.volume = volume;
 
     nextAudio.addEventListener("ended", () => {
-      setPlayingKey(null);
+      if (audioRef.current !== nextAudio) return;
       audioRef.current = null;
+      playingKeyRef.current = null;
+      setPlayingKey(null);
     });
 
     nextAudio.addEventListener("error", () => {
-      setPlayingKey(null);
+      if (audioRef.current !== nextAudio) return;
       audioRef.current = null;
+      playingKeyRef.current = null;
+      setPlayingKey(null);
       window.alert(t.previewError);
     });
 
     audioRef.current = nextAudio;
+    playingKeyRef.current = key;
     setPlayingKey(key);
 
     try {
       await nextAudio.play();
     } catch (error) {
+      if (audioRef.current !== nextAudio) return;
       console.error("Failed to play preview:", error);
       audioRef.current = null;
+      playingKeyRef.current = null;
       setPlayingKey(null);
       window.alert(t.previewError);
     }
