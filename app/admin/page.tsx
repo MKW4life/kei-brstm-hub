@@ -2466,6 +2466,12 @@ export default function AdminPage() {
                                     <small>名前を適用</small>
                                   </button>
                                   {source === "registered" && (
+                                    <span className="bulkDuplicateLoopInfo" title="登録済み曲のループ設定">
+                                      {getLoopValue(suggestion.loopType ?? "no")}
+                                      {suggestion.hasLap3Brstm ? "・L3あり" : ""}
+                                    </span>
+                                  )}
+                                  {source === "registered" && (
                                     <div className="bulkDuplicatePreviews">
                                       {suggestion.previewUrl && (
                                         <button
@@ -2493,6 +2499,20 @@ export default function AdminPage() {
                                         <small className="bulkDuplicateNoPreview">MP3未登録</small>
                                       )}
                                     </div>
+                                  )}
+                                  {source === "registered" && suggestion.trackId !== undefined && (
+                                    <button
+                                      className="dangerButton adminBulkPreviewButton"
+                                      type="button"
+                                      disabled={
+                                        bulkUploading || group.status === "done" ||
+                                        !group.files.some((item) => item.role === "normalBrstm")
+                                      }
+                                      onClick={() => void handleReplaceBulkGroup(group.key, suggestion.trackId!)}
+                                      title="既存曲のIDを保持して音声・ループ設定を更新"
+                                    >
+                                      この曲に置き換える
+                                    </button>
                                   )}
                                 </div>
                               ))}
@@ -3603,7 +3623,7 @@ export default function AdminPage() {
             <p className="label">DUPLICATE CHECK</p>
             <h2 className="adminSubTitle">似たタイトルの公開曲があります</h2>
             <p className="formMessage">
-              重複登録の可能性があります。不要な曲はこの画面で「アップロードしない」を選べます。
+              置き換えでは既存の曲名・タグを維持し、選択した音声とループ設定だけを更新します。
             </p>
 
             <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
@@ -3625,23 +3645,33 @@ export default function AdminPage() {
                     {item.matches.map((match) => (
                       <div
                         key={`${item.groupKey}-${match.id}`}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          alignItems: "center",
-                          padding: "8px 10px",
-                          borderRadius: "9px",
-                          background: "rgba(255,255,255,0.035)",
-                        }}
+                        className="adminDuplicateReviewMatch"
                       >
-                        <span>
-                          既存: {match.title}
-                          {match.titleEn !== match.title ? ` / ${match.titleEn}` : ""}
-                        </span>
+                        <div className="adminDuplicateReviewMatchInfo">
+                          <span>
+                            既存: {match.title}
+                            {match.titleEn !== match.title ? ` / ${match.titleEn}` : ""}
+                          </span>
+                          <span className="bulkDuplicateLoopInfo">
+                            既存 {getLoopValue(match.loopType)}
+                            {match.hasLap3Brstm ? "・L3あり" : ""}
+                            {(() => {
+                              const waiting = bulkGroups.find((group) => group.key === item.groupKey);
+                              return waiting ? ` / 新規 ${getLoopValue(waiting.loopType)}` : "";
+                            })()}
+                          </span>
+                        </div>
                         <strong style={{ whiteSpace: "nowrap" }}>
                           {Math.round(match.score * 100)}%
                         </strong>
+                        <button
+                          className="dangerButton adminBulkPreviewButton"
+                          type="button"
+                          disabled={bulkUploading}
+                          onClick={() => void handleReplaceBulkGroup(item.groupKey, match.id)}
+                        >
+                          この曲に置き換える
+                        </button>
                       </div>
                     ))}
                   </div>
