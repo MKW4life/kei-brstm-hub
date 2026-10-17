@@ -1824,7 +1824,9 @@ export default function AdminPage() {
       setDuplicateReview((current) => current.filter((item) => item.groupKey !== groupKey));
       setPendingUploadGroupKeys((current) => current.filter((key) => key !== groupKey));
       setDuplicateSkippedGroupKeys((current) => current.filter((key) => key !== groupKey));
-      if (duplicateReview.length <= 1) setShowDuplicateReview(false);
+      if (!pendingUploadGroupKeys.some((key) => key !== groupKey)) {
+        setShowDuplicateReview(false);
+      }
       setMessage(`${existing.title} を置き換えました。`);
       await loadTracks();
     } catch (error) {
@@ -3621,10 +3623,14 @@ export default function AdminPage() {
             }}
           >
             <p className="label">DUPLICATE CHECK</p>
-            <h2 className="adminSubTitle">似たタイトルの公開曲があります</h2>
-            <p className="formMessage">
-              置き換えでは既存の曲名・タグを維持し、選択した音声とループ設定だけを更新します。
-            </p>
+            <h2 className="adminSubTitle">
+              {duplicateReview.length > 0 ? "似たタイトルの公開曲があります" : "残りの曲を登録"}
+            </h2>
+            {duplicateReview.length > 0 && (
+              <p className="formMessage">
+                置き換えでは既存の曲名・タグを維持し、選択した音声とループ設定だけを更新します。
+              </p>
+            )}
 
             <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
               {duplicateReview.map((item) => (
@@ -3729,6 +3735,7 @@ export default function AdminPage() {
                 className="primaryButton"
                 type="button"
                 onClick={handleConfirmDuplicateUpload}
+                disabled={bulkUploading}
               >
                 {duplicateSkippedGroupKeys.length > 0
                   ? `${duplicateSkippedGroupKeys.length}曲を除外して登録`
