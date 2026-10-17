@@ -439,6 +439,9 @@ export default function AdminPage() {
   const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([]);
   const [adminPlayingKey, setAdminPlayingKey] = useState<string | null>(null);
   const adminAudioRef = useRef<HTMLAudioElement | null>(null);
+  const adminPlayingKeyRef = useRef<string | null>(null);
+  const [tagSortMode, setTagSortMode] = useState<"alphabetical" | "newest" | "count">("alphabetical");
+  const [tagSortDirection, setTagSortDirection] = useState<"asc" | "desc">("asc");
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReviewItem[]>([]);
   const [showDuplicateReview, setShowDuplicateReview] = useState(false);
   const [duplicateSkippedGroupKeys, setDuplicateSkippedGroupKeys] = useState<string[]>([]);
@@ -485,6 +488,40 @@ export default function AdminPage() {
       a.localeCompare(b)
     );
   }, [tracks, packs]);
+
+  // "Newest" means the newest track/pack registration containing this tag.
+  // The tag_definitions table does not currently expose a tag creation date.
+  const tagManagementStats = useMemo(() => {
+    const stats = new Map<string, { count: number; lastUsedAt: number; trackCount: number; packCount: number }>();
+    const add = (tags: string, createdAt: string, kind: "track" | "pack") => {
+      const timestamp = Date.parse(createdAt);
+      for (const name of new Set(splitTagList(tags).map((tag) => tag.toLowerCase()))) {
+        const current = stats.get(name) ?? { count: 0, lastUsedAt: 0, trackCount: 0, packCount: 0 };
+        current.count++;
+        if (kind === "track") current.trackCount++;
+        else current.packCount++;
+        if (Number.isFinite(timestamp)) current.lastUsedAt = Math.max(current.lastUsedAt, timestamp);
+        stats.set(name, current);
+      }
+    };
+    for (const track of tracks) add(track.tags || "", track.created_at, "track");
+    for (const pack of packs) add(pack.tags || "", pack.created_at, "pack");
+    return stats;
+  }, [tracks, packs]);
+
+  const sortedManagementTags = useMemo(() => {
+    const nameOrder = (a: string, b: string) =>
+      a.localeCompare(b, "en", { sensitivity: "base", numeric: true });
+    const direction = tagSortDirection === "asc" ? 1 : -1;
+    return [...tagSuggestions].sort((a, b) => {
+      const left = tagManagementStats.get(a.toLowerCase());
+      const right = tagManagementStats.get(b.toLowerCase());
+      if (tagSortMode === "alphabetical") return direction * nameOrder(a, b);
+      const valueA = tagSortMode === "count" ? (left?.count ?? 0) : (left?.lastUsedAt ?? 0);
+      const valueB = tagSortMode === "count" ? (right?.count ?? 0) : (right?.lastUsedAt ?? 0);
+      return direction * (valueA - valueB) || nameOrder(a, b);
+    });
+  }, [tagSuggestions, tagManagementStats, tagSortMode, tagSortDirection]);
 
   const tagSearchSuggestions = useMemo<TagSuggestion[]>(() => {
     const definitionMap = new Map(
@@ -662,57 +699,62 @@ export default function AdminPage() {
     variant: "normal" | "lap3"
   ) {
     if (!previewUrl) {
-      setMessage(
-        variant === "normal"
-          ? "通常プレビューMP3が登録されていません。"
-          : "Lap 3プレビューMP3が登録されていません。"
-      );
+      setMessage(variant === "normal"
+        ? "通常プレビューMP3が登録されていません。"
+        : "Lap 3プレビューMP3が登録されていません。");
       return;
     }
 
     const key = `${track.id}-${variant}`;
+    const previousAudio = adminAudioRef.current;
+    const wasSamePreview = adminPlayingKeyRef.current === key && previousAudio !== null;
 
-    if (adminPlayingKey === key && adminAudioRef.current) {
-      adminAudioRef.current.pause();
-      adminAudioRef.current.currentTime = 0;
-      adminAudioRef.current = null;
+    // Disown the previous Audio before pausing: its async callbacks must not
+    // clear the new player after a rapid track switch.
+    adminAudioRef.current = null;
+    adminPlayingKeyRef.current = null;
+    if (previousAudio) {
+      previousAudio.pause();
+      previousAudio.currentTime = 0;
+    }
+
+    if (wasSamePreview) {
       setAdminPlayingKey(null);
       return;
     }
 
-    if (adminAudioRef.current) {
-      adminAudioRef.current.pause();
-      adminAudioRef.current.currentTime = 0;
-    }
-
     const audio = new Audio(previewUrl);
-    const savedVolume = Number(
-      window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5"
-    );
-
+    const savedVolume = Number(window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5");
     audio.volume = Number.isFinite(savedVolume)
       ? Math.min(0.5, Math.max(0, savedVolume))
       : 0.5;
 
     audio.addEventListener("ended", () => {
+      if (adminAudioRef.current !== audio) return;
       adminAudioRef.current = null;
+      adminPlayingKeyRef.current = null;
       setAdminPlayingKey(null);
     });
 
     audio.addEventListener("error", () => {
+      if (adminAudioRef.current !== audio) return;
       adminAudioRef.current = null;
+      adminPlayingKeyRef.current = null;
       setAdminPlayingKey(null);
       setMessage("プレビューを再生できませんでした。");
     });
 
     adminAudioRef.current = audio;
+    adminPlayingKeyRef.current = key;
     setAdminPlayingKey(key);
 
     try {
       await audio.play();
     } catch (error) {
-      console.error(error);
+      if (adminAudioRef.current !== audio) return;
+      console.error("Admin preview failed:", error);
       adminAudioRef.current = null;
+      adminPlayingKeyRef.current = null;
       setAdminPlayingKey(null);
       setMessage("プレビューを再生できませんでした。");
     }
@@ -3045,6 +3087,39 @@ export default function AdminPage() {
             )}
           </div>
 
+          <div className="adminTagSortBar">
+            <label className="formLabel">
+              並べ替え
+              <select
+                className="formInput"
+                value={tagSortMode}
+                onChange={(event) => {
+                  const mode = event.target.value as "alphabetical" | "newest" | "count";
+                  setTagSortMode(mode);
+                  setTagSortDirection(mode === "alphabetical" ? "asc" : "desc");
+                }}
+              >
+                <option value="alphabetical">アルファベット順</option>
+                <option value="newest">新しい順</option>
+                <option value="count">登録が多い順</option>
+              </select>
+            </label>
+            <label className="formLabel">
+              順序
+              <select
+                className="formInput"
+                value={tagSortDirection}
+                onChange={(event) => setTagSortDirection(event.target.value as "asc" | "desc")}
+              >
+                <option value="asc">昇順</option>
+                <option value="desc">降順</option>
+              </select>
+            </label>
+            <span className="adminTagSortNote" title="新しい順の基準は、そのタグが付いた曲またはMusic Packの最新登録日時です。">
+              {tagSortMode === "newest" ? "曲・Packの最新登録日を基準" : `${tagSuggestions.length}タグ`}
+            </span>
+          </div>
+
           {tagSuggestions.length === 0 ? (
             <div className="empty">現在登録されているタグはありません。</div>
           ) : (
@@ -3055,7 +3130,7 @@ export default function AdminPage() {
                 gap: "8px",
               }}
             >
-              {tagSuggestions.map((tag) => (
+              {sortedManagementTags.map((tag) => (
                 <div
                   key={tag}
                   style={{
@@ -3067,6 +3142,14 @@ export default function AdminPage() {
                     background: "rgba(255,255,255,0.02)",
                   }}
                 >
+                  <div className="adminTagUsageCount">
+                    {(() => {
+                      const stats = tagManagementStats.get(tag.toLowerCase());
+                      return stats
+                        ? `使用数：${stats.count}（曲 ${stats.trackCount} / Pack ${stats.packCount}）`
+                        : "使用数：0";
+                    })()}
+                  </div>
                   <label className="formLabel">
                     日本語タグ名
                     <input
