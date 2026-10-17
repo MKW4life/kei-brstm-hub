@@ -291,7 +291,16 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
       };
     }
 
-    // Then try removing a standalone "3" from ANY position.
+    // A fullwidth trailing ３ is an explicit Lap 3 suffix, even without
+    // its normal-lap companion in the selected files.
+    if (item.stem.endsWith("３")) {
+      const baseName = cleanBaseName(item.stem.slice(0, -1));
+      if (baseName) {
+        return { ...item, isLap3: true, baseName };
+      }
+    }
+
+    // Then try removing a standalone "3" or "３" from ANY position.
     // It is treated as Lap 3 only when the resulting name actually exists
     // among the files selected at the same time.
     //
@@ -301,7 +310,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
     //
     // Removing the standalone 3 from the second name produces the first one,
     // so they are safely grouped together.
-    const standaloneThreePattern = /(^|[\s_.-])3(?=$|[\s_.-]|\(|（|\[|【)/g;
+    const standaloneThreePattern = /(^|[\s_.-])[3３](?=$|[\s_.-]|\(|（|\[|【)/g;
 
     const candidates: string[] = [];
     let match: RegExpExecArray | null;
@@ -372,7 +381,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         key,
         title: item.baseName,
         titleEn: "",
-        category: "コースBGM",
+        category: "その他BGM",
         tags: "No tag",
         loopType: "no",
         isPublished: true,
@@ -398,6 +407,14 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
     });
 
     map.set(key, existing);
+  }
+
+  // Only initial grouping sets category. Changing file roles later must not
+  // override a category the user selected manually.
+  for (const group of map.values()) {
+    group.category = group.files.some((item) =>
+      item.role === "lap3Brstm" || item.role === "lap3Preview"
+    ) ? "コースBGM" : "その他BGM";
   }
 
   return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
@@ -1284,7 +1301,7 @@ export default function AdminPage() {
         key: splitKey,
         title: splitTitle,
         titleEn: "",
-        category: source.category,
+        category: "その他BGM",
         tags: normalizeTagsForSave(source.tags),
         loopType: "no",
         isPublished: source.isPublished,
