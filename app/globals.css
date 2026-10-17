@@ -814,10 +814,43 @@ a {
   font-size: 11px;
   padding: 0 0 11px;
 }
+.adminTagList {
+  display: grid;
+  gap: 8px;
+  overflow-x: auto;
+}
+.adminTagRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) max-content auto auto;
+  gap: 10px;
+  align-items: end;
+  min-width: 740px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+}
+.adminTagField {
+  min-width: 0;
+  gap: 5px;
+  font-size: 12px;
+}
+.adminTagField .formInput {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 9px;
+}
+.adminTagButton {
+  min-height: 40px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
 .adminTagUsageCount {
   color: #a1a1aa;
   font-size: 11px;
   line-height: 1.4;
+  padding-bottom: 13px;
+  white-space: nowrap;
 }
 @media (max-width: 700px) {
   .adminTagSortBar { gap: 8px; }

@@ -1281,7 +1281,9 @@ export default function AdminPage() {
   }
 
   async function handleSaveTagEnglish(tag: string) {
-    const nameEn = (tagEnglishDrafts[tag] ?? "").trim();
+    const nameEn = (tagEnglishDrafts[tag] ?? tagDefinitions.find(
+      (definition) => definition.name.toLowerCase() === tag.toLowerCase()
+    )?.name_en ?? "").trim();
 
     try {
       const { error } = await supabase
@@ -1299,12 +1301,12 @@ export default function AdminPage() {
       setMessage(
         nameEn
           ? `#${tag} の英語名を「${nameEn}」に保存しました。`
-          : `#${tag} の英語名を空欄にしました。英語表示では日本語名を使用します。`
+          : `#${tag} の英語名を空欄にしました。`
       );
       await loadTagDefinitions();
     } catch (error) {
       console.error(error);
-      setMessage("タグ英語名の保存に失敗しました。tag_definitionsテーブルを確認してください。");
+      setMessage("英語名を保存できませんでした。");
     }
   }
 
@@ -1364,6 +1366,27 @@ export default function AdminPage() {
     } catch (error) {
       console.error(error);
       setMessage("タグ名の変更に失敗しました。");
+    }
+  }
+
+  async function handleSaveTag(tag: string) {
+    const newTag = (tagDrafts[tag] ?? tag).trim();
+    if (!newTag) {
+      setMessage("日本語名を入力してください。");
+      return;
+    }
+
+    const previousEnglish = tagDefinitions.find(
+      (definition) => definition.name.toLowerCase() === tag.toLowerCase()
+    )?.name_en ?? "";
+    const nextEnglish = (tagEnglishDrafts[tag] ?? previousEnglish).trim();
+
+    if (newTag.toLowerCase() !== tag.toLowerCase()) {
+      await handleRenameTag(tag);
+    } else if (nextEnglish !== previousEnglish.trim()) {
+      await handleSaveTagEnglish(tag);
+    } else {
+      setMessage("変更はありません。");
     }
   }
 
@@ -2888,16 +2911,13 @@ export default function AdminPage() {
         <details className="adminPanel wide adminCollapsiblePanel" id="admin-tags" open>
           <summary className="adminSectionSummary">
             <span className="adminSectionSummaryTitle">
-              <span className="label">TAG MANAGEMENT</span>
               <span className="adminSubTitle">タグ管理</span>
             </span>
             <span className="adminSectionChevron" aria-hidden="true" />
           </summary>
           <div className="adminSectionBody">
 
-          <p className="formMessage">
-            タグ名の変更・削除は、そのタグを使っているすべての曲とMusic Packに反映されます。英語名は空欄なら日本語名をそのまま使います。
-          </p>
+          <p className="formMessage">タグの変更・削除は、すべての曲とPackに反映されます。</p>
 
           <div
             style={{
@@ -2909,10 +2929,6 @@ export default function AdminPage() {
             }}
           >
             <h3 style={{ margin: "0 0 6px" }}>タグを複数曲へ一括追加</h3>
-            <p className="formMessage" style={{ marginBottom: "12px" }}>
-              後から作ったタグも、曲名・英語名・既存タグで対象曲を検索してまとめて付けられます。
-            </p>
-
             <div
               style={{
                 display: "grid",
@@ -3080,11 +3096,7 @@ export default function AdminPage() {
                     : `選択した${bulkTagSelectedTrackIds.length}曲にタグを追加`}
                 </button>
               </>
-            ) : (
-              <p className="formMessage" style={{ marginTop: "12px" }}>
-                対象曲を検索すると選択リストが表示されます。
-              </p>
-            )}
+            ) : null}
           </div>
 
           <div className="adminTagSortBar">
@@ -3120,41 +3132,13 @@ export default function AdminPage() {
             </span>
           </div>
 
-          {tagSuggestions.length === 0 ? (
-            <div className="empty">現在登録されているタグはありません。</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr)",
-                gap: "8px",
-              }}
-            >
+          <div className="adminTagList">
               {sortedManagementTags.map((tag) => (
-                <div
-                  key={tag}
-                  style={{
-                    display: "grid",
-                    gap: "7px",
-                    padding: "9px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: "10px",
-                    background: "rgba(255,255,255,0.02)",
-                  }}
-                >
-                  <div className="adminTagUsageCount">
-                    {(() => {
-                      const stats = tagManagementStats.get(tag.toLowerCase());
-                      return stats
-                        ? `使用数：${stats.count}（曲 ${stats.trackCount} / Pack ${stats.packCount}）`
-                        : "使用数：0";
-                    })()}
-                  </div>
-                  <label className="formLabel">
-                    日本語タグ名
+                <div className="adminTagRow" key={tag}>
+                  <label className="formLabel adminTagField">
+                    日本語名
                     <input
                       className="formInput"
-                      style={{ minWidth: 0, padding: "8px 9px" }}
                       value={tagDrafts[tag] ?? tag}
                       onChange={(event) =>
                         setTagDrafts((current) => ({
@@ -3165,11 +3149,10 @@ export default function AdminPage() {
                     />
                   </label>
 
-                  <label className="formLabel">
-                    英語タグ名（空欄なら日本語名）
+                  <label className="formLabel adminTagField">
+                    英語名
                     <input
                       className="formInput"
-                      style={{ minWidth: 0, padding: "8px 9px" }}
                       value={
                         tagEnglishDrafts[tag] ??
                         tagDefinitions.find(
@@ -3184,45 +3167,37 @@ export default function AdminPage() {
                           [tag]: event.target.value,
                         }))
                       }
-                      placeholder={tag}
+                      title="空欄の場合は日本語名を表示"
                     />
                   </label>
 
-                  <div className="adminActions" style={{ justifyContent: "flex-start" }}>
-                    <button
-                      className="secondaryButton"
-                      style={{ padding: "8px 9px" }}
-                      type="button"
-                      onClick={() => handleRenameTag(tag)}
-                      title="日本語タグ名を変更"
-                    >
-                      日本語名を変更
-                    </button>
-
-                    <button
-                      className="secondaryButton"
-                      style={{ padding: "8px 9px" }}
-                      type="button"
-                      onClick={() => handleSaveTagEnglish(tag)}
-                      title="英語タグ名を保存"
-                    >
-                      英語名を保存
-                    </button>
-
-                    <button
-                      className="dangerButton"
-                      style={{ padding: "8px 9px" }}
-                      type="button"
-                      onClick={() => handleDeleteTag(tag)}
-                      title="タグを削除"
-                    >
-                      削除
-                    </button>
+                  <div className="adminTagUsageCount">
+                    {(() => {
+                      const stats = tagManagementStats.get(tag.toLowerCase());
+                      return stats
+                        ? `${stats.count}件（曲 ${stats.trackCount}・Pack ${stats.packCount}）`
+                        : "0件";
+                    })()}
                   </div>
+                  <button
+                    className="secondaryButton adminTagButton"
+                    type="button"
+                    onClick={() => handleSaveTag(tag)}
+                    title="日本語名・英語名を保存"
+                  >
+                    保存
+                  </button>
+                  <button
+                    className="dangerButton adminTagButton"
+                    type="button"
+                    onClick={() => handleDeleteTag(tag)}
+                    title="このタグをすべての曲とPackから削除"
+                  >
+                    削除
+                  </button>
                 </div>
               ))}
-            </div>
-          )}
+          </div>
           </div>
         </details>
       </main>
