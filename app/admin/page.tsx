@@ -1837,6 +1837,28 @@ export default function AdminPage() {
     await prepareGroupUpload([group]);
   }
 
+  async function handleUploadThroughGroup(groupKey: string) {
+    // Follow the current on-screen order; completed groups are skipped by
+    // prepareGroupUpload, even when the user is showing completed uploads.
+    const endIndex = visibleBulkGroups.findIndex((group) => group.key === groupKey);
+    if (endIndex === -1) return;
+
+    await prepareGroupUpload(visibleBulkGroups.slice(0, endIndex + 1));
+  }
+
+  function handleCancelBulkGroup(groupKey: string) {
+    if (bulkUploading) return;
+    const group = bulkGroups.find((item) => item.key === groupKey);
+    if (!group || group.status === "done") return;
+
+    // Remove this local pending group only; uploaded tracks and files are untouched.
+    setBulkGroups((current) => current.filter((item) => item.key !== groupKey));
+    setPendingUploadGroupKeys((current) => current.filter((key) => key !== groupKey));
+    setDuplicateSkippedGroupKeys((current) => current.filter((key) => key !== groupKey));
+    setDuplicateReview((current) => current.filter((item) => item.groupKey !== groupKey));
+    setMessage(`${group.title} を待機一覧から除外しました。`);
+  }
+
   async function handleConfirmDuplicateUpload() {
     const skipped = new Set<string>(duplicateSkippedGroupKeys);
     const targets = new Set<string>(pendingUploadGroupKeys);
@@ -2470,24 +2492,50 @@ export default function AdminPage() {
                           marginTop: "10px",
                         }}
                       >
-                        <span className="formMessage">Status: {group.status}</span>
+                        <span className="formMessage" style={{ marginRight: "auto" }}>
+                          Status: {group.status}
+                        </span>
 
-                        <button
-                          className="secondaryButton"
-                          type="button"
-                          onClick={() => handleSingleGroupUpload(group.key)}
-                          disabled={
-                            bulkUploading ||
-                            group.status === "done" ||
-                            !group.files.some(
-                              (item) => item.role === "normalBrstm"
-                            )
-                          }
-                        >
-                          {group.status === "done"
-                            ? "アップロード済み"
-                            : "この曲だけアップロード"}
-                        </button>
+                        <div className="adminActions" style={{ justifyContent: "flex-end" }}>
+                          <button
+                            className="secondaryButton"
+                            type="button"
+                            onClick={() => handleSingleGroupUpload(group.key)}
+                            disabled={
+                              bulkUploading ||
+                              group.status === "done" ||
+                              !group.files.some((item) => item.role === "normalBrstm")
+                            }
+                          >
+                            {group.status === "done"
+                              ? "アップロード済み"
+                              : "この曲だけアップロード"}
+                          </button>
+
+                          <button
+                            className="secondaryButton"
+                            type="button"
+                            onClick={() => handleUploadThroughGroup(group.key)}
+                            disabled={
+                              bulkUploading ||
+                              group.status === "done" ||
+                              !group.files.some((item) => item.role === "normalBrstm")
+                            }
+                            title="一覧の先頭からこの曲までをアップロード"
+                          >
+                            この曲までアップロード
+                          </button>
+
+                          <button
+                            className="secondaryButton"
+                            type="button"
+                            onClick={() => handleCancelBulkGroup(group.key)}
+                            disabled={bulkUploading || group.status === "done"}
+                            title="アップロード待機一覧から除外（登録済みデータは削除しません）"
+                          >
+                            この曲をキャンセル
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </article>
