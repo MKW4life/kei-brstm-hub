@@ -60,6 +60,28 @@ type BulkGroup = {
   status: "ready" | "uploading" | "done" | "error" | "skipped";
 };
 
+/** Preview availability follows the assigned file roles, not the original file names. */
+function getMissingBulkPreviews(group: BulkGroup): string[] {
+  const roles = new Set(group.files.map((file) => file.role));
+  const missing: string[] = [];
+  if (roles.has("normalBrstm") && !roles.has("normalPreview")) {
+    missing.push("通常プレビューMP3");
+  }
+  if (roles.has("lap3Brstm") && !roles.has("lap3Preview")) {
+    missing.push("Lap 3プレビューMP3");
+  }
+  return missing;
+}
+
+function getMissingTrackPreviews(track: Track): string[] {
+  const missing: string[] = [];
+  if (track.brstm_url && !track.preview_url) missing.push("通常プレビューMP3");
+  if (track.brstm_lap3_url && !track.preview_lap3_url) {
+    missing.push("Lap 3プレビューMP3");
+  }
+  return missing;
+}
+
 type DuplicateMatch = {
   id: number;
   title: string;
@@ -2170,6 +2192,15 @@ export default function AdminPage() {
                         suggestions={tagPickerSuggestions}
                       />
 
+                      {getMissingBulkPreviews(group).length > 0 && (
+                        <div className="previewMissingNotice" role="status">
+                          <span aria-hidden="true">⚠️</span>
+                          <span>
+                            プレビュー未選択：{getMissingBulkPreviews(group).join("・")}
+                          </span>
+                        </div>
+                      )}
+
                       <div
                         style={{
                           display: "grid",
@@ -2489,6 +2520,9 @@ export default function AdminPage() {
 
                       <label className="formLabel">
                         通常用プレビューMP3を差し替え
+                        {!track.preview_url && !editPreviewFile && (
+                          <span className="previewMissingInline" title="通常プレビューMP3未登録">⚠️ 未登録</span>
+                        )}
                         <input
                           className="formInput"
                           type="file"
@@ -2515,6 +2549,9 @@ export default function AdminPage() {
 
                       <label className="formLabel">
                         Lap 3用プレビューMP3を差し替え
+                        {track.brstm_lap3_url && !track.preview_lap3_url && !editPreviewLap3File && (
+                          <span className="previewMissingInline" title="Lap 3プレビューMP3未登録">⚠️ 未登録</span>
+                        )}
                         <input
                           className="formInput"
                           type="file"
@@ -2545,7 +2582,19 @@ export default function AdminPage() {
                 ) : (
                   <>
                     <div>
-                      <h3>{track.title}</h3>
+                      <h3>
+                        {track.title}
+                        {getMissingTrackPreviews(track).length > 0 && (
+                          <span
+                            className="previewMissingInline"
+                            role="img"
+                            aria-label={getMissingTrackPreviews(track).join("・") + "が未登録"}
+                            title={getMissingTrackPreviews(track).join("・") + "が未登録"}
+                          >
+                            ⚠️
+                          </span>
+                        )}
+                      </h3>
                       <p>英語名: {track.title_en || track.title}</p>
                       <p>
                         {track.category} / {getLoopValue(track.loop_type)}
@@ -2553,11 +2602,11 @@ export default function AdminPage() {
                       {track.tags && renderTags(track.tags)}
                       <p>
                         通常: {track.brstm_url ? "BRSTMあり" : "BRSTMなし"} / 通常プレビュー:{" "}
-                        {track.preview_url ? "MP3あり" : "MP3なし"}
+                        {track.preview_url ? "MP3あり" : track.brstm_url ? "⚠️ MP3なし" : "MP3なし"}
                       </p>
                       <p>
                         Lap 3: {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"} / Lap 3プレビュー:{" "}
-                        {track.preview_lap3_url ? "MP3あり" : "MP3なし"}
+                        {track.preview_lap3_url ? "MP3あり" : track.brstm_lap3_url ? "⚠️ MP3なし" : "MP3なし"}
                       </p>
                       <p>{track.is_published ? "公開中" : "非公開"}</p>
 
