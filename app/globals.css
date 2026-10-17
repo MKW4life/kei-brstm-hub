@@ -911,3 +911,34 @@ a {
     max-width: 40%;
   }
 }
+
+/* Inline comparison between a pending MP3 and registered duplicates. */
+.adminBulkFileActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.adminBulkPreviewButton {
+  min-height: 32px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.bulkTitleCandidate {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+}
+.bulkDuplicatePreviews {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bulkDuplicateNoPreview {
+  color: #a1a1aa;
+  font-size: 11px;
+}
