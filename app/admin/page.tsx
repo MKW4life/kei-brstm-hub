@@ -844,9 +844,10 @@ export default function AdminPage() {
     if (wasSamePreview) return;
 
     let objectUrl: string | null = null;
+    let audio: HTMLAudioElement | null = null;
     try {
       if (source instanceof File) objectUrl = URL.createObjectURL(source);
-      const audio = new Audio(objectUrl ?? (source as string));
+      audio = new Audio(objectUrl ?? (source as string));
       const savedVolume = Number(window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5");
       audio.volume = Number.isFinite(savedVolume)
         ? Math.min(0.5, Math.max(0, savedVolume))
@@ -869,8 +870,12 @@ export default function AdminPage() {
       setAdminPlayingKey(key);
       await audio.play();
     } catch (error) {
-      // A rejected play() from a previous preview must not clear the new one.
-      if (adminPlayingKeyRef.current !== key) return;
+      // Check Audio identity, not just the key: the same button may have
+      // been started again before an older play() promise settles.
+      if (adminAudioRef.current !== audio || !audio) {
+        if (objectUrl && adminObjectUrlRef.current !== objectUrl) URL.revokeObjectURL(objectUrl);
+        return;
+      }
       console.error("Admin preview failed:", error);
       stopAdminAudio();
       setMessage("プレビューを再生できませんでした。");
