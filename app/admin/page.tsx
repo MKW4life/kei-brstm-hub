@@ -1376,10 +1376,17 @@ export default function AdminPage() {
       return;
     }
 
+    const previousEnglish = tagDefinitions.find(
+      (definition) => definition.name.toLowerCase() === tag.toLowerCase()
+    )?.name_en ?? "";
+    const nextEnglish = (tagEnglishDrafts[tag] ?? previousEnglish).trim();
+
     if (newTag.toLowerCase() !== tag.toLowerCase()) {
       await handleRenameTag(tag);
-    } else {
+    } else if (nextEnglish !== previousEnglish.trim()) {
       await handleSaveTagEnglish(tag);
+    } else {
+      setMessage("変更はありません。");
     }
   }
 
@@ -3132,7 +3139,6 @@ export default function AdminPage() {
                     日本語名
                     <input
                       className="formInput"
-                      style={{ minWidth: 0, padding: "8px 9px" }}
                       value={tagDrafts[tag] ?? tag}
                       onChange={(event) =>
                         setTagDrafts((current) => ({
@@ -3147,7 +3153,6 @@ export default function AdminPage() {
                     英語名
                     <input
                       className="formInput"
-                      style={{ minWidth: 0, padding: "8px 9px" }}
                       value={
                         tagEnglishDrafts[tag] ??
                         tagDefinitions.find(
@@ -3162,7 +3167,7 @@ export default function AdminPage() {
                           [tag]: event.target.value,
                         }))
                       }
-                      placeholder="未設定（日本語名を表示）"
+                      title="空欄の場合は日本語名を表示"
                     />
                   </label>
 
