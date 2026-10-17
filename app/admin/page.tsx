@@ -846,7 +846,7 @@ export default function AdminPage() {
     let objectUrl: string | null = null;
     try {
       if (source instanceof File) objectUrl = URL.createObjectURL(source);
-      const audio = new Audio(objectUrl ?? source as string);
+      const audio = new Audio(objectUrl ?? (source as string));
       const savedVolume = Number(window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5");
       audio.volume = Number.isFinite(savedVolume)
         ? Math.min(0.5, Math.max(0, savedVolume))
@@ -890,6 +890,12 @@ export default function AdminPage() {
   function handleQueuedMp3Preview(file: BulkGroupFile) {
     if (file.extension !== "mp3") return;
     void playAdminAudio(`upload-file-${file.id}`, file.file);
+  }
+
+  function handleDuplicatePreview(suggestion: BulkTitleSuggestion, variant: "normal" | "lap3") {
+    const url = variant === "normal" ? suggestion.previewUrl : suggestion.previewLap3Url;
+    if (!url || suggestion.trackId === undefined) return;
+    void playAdminAudio(`duplicate-${suggestion.trackId}-${variant}`, url);
   }
 
   async function loadTracks() {
@@ -2321,27 +2327,64 @@ export default function AdminPage() {
                           />
                         </label>
 
-                        {(bulkTitleSuggestions.get(group.key)?.length ?? 0) > 0 && (
-                          <div className="bulkTitleSuggestions">
-                            <span className="bulkTitleSuggestionHeading">曲名候補</span>
-                            {bulkTitleSuggestions.get(group.key)?.map((suggestion, index) => (
-                              <button
-                                key={`${group.key}-title-${index}`}
-                                className="secondaryButton bulkTitleSuggestion"
-                                type="button"
-                                title={suggestion.source === "registered" ? "登録済みの曲名" : "ファイル名から抽出"}
-                                onClick={() => updateBulkGroup(group.key, {
-                                  title: suggestion.title,
-                                  titleEn: suggestion.titleEn,
-                                })}
-                              >
-                                <span>{suggestion.title}</span>
-                                <span>{suggestion.titleEn}</span>
-                                <small>{suggestion.source === "registered" ? "登録済み" : "ファイル名"}</small>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {(["registered", "filename"] as const).map((source) => {
+                          const suggestions = (bulkTitleSuggestions.get(group.key) ?? [])
+                            .filter((item) => item.source === source);
+                          if (!suggestions.length) return null;
+                          return (
+                            <div className="bulkTitleSuggestions" key={source}>
+                              <span className="bulkTitleSuggestionHeading">
+                                {source === "registered" ? "重複候補" : "ファイル名候補"}
+                              </span>
+                              {suggestions.map((suggestion, index) => (
+                                <div className="bulkTitleCandidate" key={suggestion.trackId ?? index}>
+                                  <button
+                                    className="secondaryButton bulkTitleSuggestion"
+                                    type="button"
+                                    title="この曲名を入力欄へ反映"
+                                    onClick={() => updateBulkGroup(group.key, {
+                                      title: suggestion.title,
+                                      titleEn: suggestion.titleEn,
+                                    })}
+                                  >
+                                    <span>{suggestion.title}</span>
+                                    <span>{suggestion.titleEn}</span>
+                                    <small>名前を適用</small>
+                                  </button>
+                                  {source === "registered" && (
+                                    <div className="bulkDuplicatePreviews">
+                                      {suggestion.previewUrl && (
+                                        <button
+                                          className="secondaryButton adminBulkPreviewButton"
+                                          type="button"
+                                          onClick={() => handleDuplicatePreview(suggestion, "normal")}
+                                          title="登録済み曲の通常MP3を試聴"
+                                        >
+                                          {adminPlayingKey === `duplicate-${suggestion.trackId}-normal`
+                                            ? "■ 停止" : "▶ 通常"}
+                                        </button>
+                                      )}
+                                      {suggestion.previewLap3Url && (
+                                        <button
+                                          className="secondaryButton adminBulkPreviewButton"
+                                          type="button"
+                                          onClick={() => handleDuplicatePreview(suggestion, "lap3")}
+                                          title="登録済み曲のLap 3 MP3を試聴"
+                                        >
+                                          {adminPlayingKey === `duplicate-${suggestion.trackId}-lap3`
+                                            ? "■ 停止" : "▶ L3"}
+                                        </button>
+                                      )}
+                                      {!suggestion.previewUrl && !suggestion.previewLap3Url && (
+                                        <small className="bulkDuplicateNoPreview">MP3未登録</small>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
 
                         <label className="formLabel">
                           カテゴリ
@@ -2443,21 +2486,29 @@ export default function AdminPage() {
                                 {getRoleLabel(item.role)}
                               </div>
 
-                              {group.files.length > 1 && (
-                                <button
-                                  className="secondaryButton"
-                                  style={{
-                                    marginTop: "7px",
-                                    padding: "6px 9px",
-                                    fontSize: "11px",
-                                  }}
-                                  type="button"
-                                  onClick={() => splitBulkFile(group.key, item.id)}
-                                  disabled={bulkUploading || group.status === "done"}
-                                >
-                                  別の曲として分離
-                                </button>
-                              )}
+                              <div className="adminBulkFileActions">
+                                {item.extension === "mp3" && (
+                                  <button
+                                    className="secondaryButton adminBulkPreviewButton"
+                                    type="button"
+                                    onClick={() => handleQueuedMp3Preview(item)}
+                                    title="アップロード待機中のMP3を試聴"
+                                  >
+                                    {adminPlayingKey === `upload-file-${item.id}`
+                                      ? "■ 停止" : "▶ MP3試聴"}
+                                  </button>
+                                )}
+                                {group.files.length > 1 && (
+                                  <button
+                                    className="secondaryButton adminBulkPreviewButton"
+                                    type="button"
+                                    onClick={() => splitBulkFile(group.key, item.id)}
+                                    disabled={bulkUploading || group.status === "done"}
+                                  >
+                                    別の曲として分離
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             <label className="formLabel">
