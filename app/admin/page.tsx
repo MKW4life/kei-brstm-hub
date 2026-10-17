@@ -60,6 +60,13 @@ type BulkGroup = {
   status: "ready" | "uploading" | "done" | "error" | "skipped";
 };
 
+type BulkTitleSuggestion = {
+  title: string;
+  titleEn: string;
+  source: "filename" | "registered";
+  score: number;
+};
+
 /** Preview availability follows the assigned file roles, not the original file names. */
 function getMissingBulkPreviews(group: BulkGroup): string[] {
   const roles = new Set(group.files.map((file) => file.role));
@@ -389,6 +396,104 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
   return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
 }
 
+const japaneseCharacters = /[\u3040-\u30ff\u3400-\u9fff]/u;
+const latinCharacters = /[A-Za-z]/;
+const soundtrackLabel = /\b(?:ost|bgm|soundtrack|remix|version|instrumental|cover|karaoke|loop|lap ?3)\b/i;
+
+function removeSoundtrackSuffix(value: string) {
+  return value.replace(/\s*[[(（【][^\])）】]*(?:OST|BGM|soundtrack)[^\])）】]*[\])）】]\s*$/i, "").trim();
+}
+
+/** Only accept bilingual segments when the script boundary is unambiguous. */
+function extractBilingualFilenameTitle(value: string) {
+  const parts = value.split(/\s+(?:\/|\||｜|[-–—])\s+|\s*／\s*/).map((part) => part.trim());
+
+  let pair: string[] | null = parts.length === 2 ? parts : null;
+  if (!pair) {
+    const parenthesized = value.match(/^(.+?)\s*[（(]([^()（）]+)[)）]$/);
+    if (parenthesized) pair = [parenthesized[1].trim(), parenthesized[2].trim()];
+  }
+  if (!pair) return null;
+
+  const [left, right] = pair;
+  const leftJa = japaneseCharacters.test(left);
+  const rightJa = japaneseCharacters.test(right);
+  if (leftJa === rightJa || soundtrackLabel.test(left) || soundtrackLabel.test(right)) {
+    return null;
+  }
+
+  const japanese = leftJa ? left : right;
+  const english = leftJa ? right : left;
+  return latinCharacters.test(english) && japanese.length > 1 && english.length > 1
+    ? { title: japanese, titleEn: english }
+    : null;
+}
+
+/** Suggestions are never saved until selected by the user. */
+function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitleSuggestion[] {
+  const sourceFiles = [
+    ...group.files.filter((item) => item.role === "normalBrstm"),
+    ...group.files,
+  ];
+  const names = Array.from(new Set(
+    sourceFiles.flatMap((item) => {
+      const stem = cleanBaseName(removeExplicitLap3Marker(stripExtension(item.name)).baseName);
+      return [stem, removeSoundtrackSuffix(stem)];
+    }).filter(Boolean)
+  ));
+  const suggestions: BulkTitleSuggestion[] = [];
+  const add = (candidate: BulkTitleSuggestion) => {
+    if (!candidate.title.trim() || !candidate.titleEn.trim()) return;
+    if (candidate.title === group.title && candidate.titleEn === group.titleEn) return;
+    if (suggestions.some((item) =>
+      normalizeCompareName(item.title) === normalizeCompareName(candidate.title) &&
+      normalizeCompareName(item.titleEn) === normalizeCompareName(candidate.titleEn)
+    )) return;
+    suggestions.push(candidate);
+  };
+
+  const primaryFiles = group.files.filter((item) => item.role === "normalBrstm");
+  for (const file of primaryFiles.length > 0 ? primaryFiles : group.files) {
+    // Inspect raw filenames so a bilingual " - " separator is not lost
+    // to grouping normalization.
+    const pair = extractBilingualFilenameTitle(stripExtension(file.name));
+    if (pair) {
+      add({ ...pair, source: "filename", score: 1 });
+    }
+  }
+
+  for (const track of tracks) {
+    if (!track.title?.trim() || !track.title_en?.trim()) continue;
+    const matchedScore = Math.max(0, ...names.flatMap((name) =>
+      [track.title, track.title_en].map((known) => titleSimilarity(name, known))
+    ));
+    if (matchedScore >= 0.88) {
+      add({
+        title: track.title.trim(),
+        titleEn: track.title_en.trim(),
+        source: "registered",
+        score: matchedScore,
+      });
+    }
+  }
+
+  // For an English-only filename, offer it as an English-field candidate,
+  // not as a fabricated Japanese translation.
+  if (suggestions.length === 0) {
+    const name = names.find((value) =>
+      latinCharacters.test(value) && !japaneseCharacters.test(value)
+    );
+    if (name) add({ title: group.title, titleEn: name, source: "filename", score: 0.5 });
+  }
+
+  return suggestions
+    .sort((a, b) =>
+      Number(b.source === "registered") - Number(a.source === "registered") ||
+      b.score - a.score
+    )
+    .slice(0, 3);
+}
+
 function getStoragePathFromPublicUrl(bucket: string, publicUrl: string) {
   if (!publicUrl) return null;
 
@@ -659,6 +764,13 @@ export default function AdminPage() {
     bulkTagFilterMode,
     tagAliasMap,
   ]);
+
+  const bulkTitleSuggestions = useMemo(() => new Map(
+    bulkGroups.map((group) => [
+      group.key,
+      buildBulkTitleSuggestions(group, tracks),
+    ])
+  ), [bulkGroups, tracks]);
 
   const completedBulkGroupCount = bulkGroups.filter(
     (group) => group.status === "done"
@@ -2162,6 +2274,28 @@ export default function AdminPage() {
                             }
                           />
                         </label>
+
+                        {(bulkTitleSuggestions.get(group.key)?.length ?? 0) > 0 && (
+                          <div className="bulkTitleSuggestions">
+                            <span className="bulkTitleSuggestionHeading">曲名候補</span>
+                            {bulkTitleSuggestions.get(group.key)?.map((suggestion, index) => (
+                              <button
+                                key={`${group.key}-title-${index}`}
+                                className="secondaryButton bulkTitleSuggestion"
+                                type="button"
+                                title={suggestion.source === "registered" ? "登録済みの曲名" : "ファイル名から抽出"}
+                                onClick={() => updateBulkGroup(group.key, {
+                                  title: suggestion.title,
+                                  titleEn: suggestion.titleEn,
+                                })}
+                              >
+                                <span>{suggestion.title}</span>
+                                <span>{suggestion.titleEn}</span>
+                                <small>{suggestion.source === "registered" ? "登録済み" : "ファイル名"}</small>
+                              </button>
+                            ))}
+                          </div>
+                        )}
 
                         <label className="formLabel">
                           カテゴリ

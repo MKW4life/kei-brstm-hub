@@ -864,3 +864,50 @@ a {
   .adminTagSortBar .formLabel { flex: 1 1 145px; }
   .adminTagSortNote { width: 100%; padding-bottom: 0; }
 }
+
+.bulkTitleSuggestions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.bulkTitleSuggestionHeading {
+  color: #a1a1aa;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.bulkTitleSuggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: left;
+}
+.bulkTitleSuggestion span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.bulkTitleSuggestion span + span {
+  color: #a1a1aa;
+}
+.bulkTitleSuggestion small {
+  color: #71717a;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .bulkTitleSuggestion {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .bulkTitleSuggestion span {
+    max-width: 40%;
+  }
+}
