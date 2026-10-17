@@ -458,3 +458,258 @@
     cursor: pointer;
   }
 }
+
+
+/* Optional final-lap override: one concise action per race slot. */
+.lap3Control {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lap3ChangeButton {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 7px;
+  color: inherit;
+  background: rgba(255,255,255,.045);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lap3ChangeButton:hover { border-color: rgba(255,255,255,.35); }
+.lap3Assigned {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  padding: 6px 7px;
+  background: rgba(138,195,252,.085);
+  border: 1px solid rgba(138,195,252,.18);
+  border-radius: 7px;
+  min-width: 0;
+}
+.lap3AssignedText {
+  min-width: 0;
+  flex: 1 1 100%;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+  font-size: 9px;
+  font-weight: 700;
+}
+.lap3Tag, .sourceBadge {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: rgba(255,255,255,.09);
+  font-size: 8px;
+  font-weight: 700;
+}
+.lap3Tag { color: #a4dbff; background: rgba(164,219,255,.14); }
+.lap3Actions { display: flex; gap: 4px; }
+.lap3Actions button {
+  padding: 4px 6px;
+  color: inherit;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 6px;
+  background: rgba(255,255,255,.045);
+  font-size: 9px;
+  cursor: pointer;
+}
+.lap3Backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0,0,0,.79);
+  backdrop-filter: blur(4px);
+}
+.lap3Dialog {
+  width: min(960px, 100%);
+  max-height: min(760px, calc(100dvh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 16px;
+  background: #101014;
+  color: #f8f8fa;
+  box-shadow: 0 28px 100px rgba(0,0,0,.68);
+}
+.lap3DialogHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.lap3DialogHeader h2 { margin: 5px 0; font-size: 19px; }
+.lap3DialogHeader p { margin: 0; font-size: 11px; opacity: .65; }
+.lap3DialogHeader > button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  color: inherit;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 20px;
+}
+.lap3DialogBody {
+  display: grid;
+  grid-template-columns: minmax(0,1.15fr) minmax(0,1fr);
+  min-height: 0;
+  flex: 1;
+}
+.lap3Library {
+  min-height: 0;
+  padding: 0 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255,255,255,.1);
+}
+.lap3Library > .search { flex: none; margin-bottom: 10px; }
+.lap3TrackList {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lap3TrackRow {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 5px;
+  align-items: center;
+  padding: 5px 7px;
+  border: 1px solid rgba(255,255,255,.095);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+}
+.lap3TrackSelected {
+  border-color: rgba(122,195,251,.58);
+  background: rgba(122,195,251,.09);
+}
+.lap3TrackSelect {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+.lap3TrackSelect strong {
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.lap3TrackSelect small { font-size: 9px; opacity: .56; }
+.lap3TrackPreviews { display: flex; gap: 3px; }
+.lap3TrackPreviews button {
+  color: inherit;
+  background: rgba(255,255,255,.045);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.lap3TrackPreviews button:disabled,
+.lap3VersionRow button:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+.lap3Detail {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+}
+.lap3DetailTitle {
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.lap3VersionList { display: flex; flex-direction: column; gap: 8px; }
+.lap3VersionRow {
+  display: flex;
+  align-items: stretch;
+  padding: 6px;
+  gap: 6px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+}
+.lap3VersionSelected {
+  border-color: rgba(122,195,251,.62);
+  background: rgba(122,195,251,.1);
+}
+.lap3VersionSelect {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  color: inherit;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.lap3VersionSelect > span:first-child {
+  color: #97d2ff;
+  font-size: 16px;
+}
+.lap3PreviewButton {
+  flex: none;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.035);
+  color: inherit;
+  border-radius: 7px;
+  padding: 7px 8px;
+  cursor: pointer;
+  font-size: 10px;
+}
+.lap3Empty { font-size: 11px; opacity: .55; line-height: 1.6; }
+.lap3DialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+.lap3DialogActions > button:first-child {
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+@media (max-width: 690px) {
+  .lap3DialogBody { grid-template-columns: minmax(0,1fr); overflow: auto; }
+  .lap3Library {
+    max-height: 42vh;
+    min-height: 160px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .lap3Detail { flex: none; }
+}

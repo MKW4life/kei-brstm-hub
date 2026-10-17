@@ -18,6 +18,17 @@ type PackTrack = {
   preview_lap3_url: string;
 };
 
+type Lap3Version = "normal" | "lap3";
+type Lap3Override = { trackId: number; version: Lap3Version };
+
+function brstmForVersion(track: PackTrack, version: Lap3Version) {
+  return version === "lap3" ? track.brstm_lap3_url : track.brstm_url;
+}
+
+function previewForVersion(track: PackTrack, version: Lap3Version) {
+  return version === "lap3" ? track.preview_lap3_url : track.preview_url;
+}
+
 type TagDefinition = {
   name: string;
   name_en: string;
@@ -272,6 +283,11 @@ export default function PackCreator({
   ) => void;
 }) {
   const [assignments, setAssignments] = useState<Record<string, number>>({});
+  const [lap3Overrides, setLap3Overrides] = useState<Record<string, Lap3Override>>({});
+  const [lap3EditorSlot, setLap3EditorSlot] = useState<Slot | null>(null);
+  const [lap3DraftTrackId, setLap3DraftTrackId] = useState<number | null>(null);
+  const [lap3DraftVersion, setLap3DraftVersion] = useState<Lap3Version>("normal");
+  const [lap3Query, setLap3Query] = useState("");
   const [query, setQuery] = useState("");
   const [tagQuery, setTagQuery] = useState("");
   const [tagMatchMode, setTagMatchMode] = useState<"all" | "any">("all");
@@ -359,6 +375,54 @@ export default function PackCreator({
       );
   }, [tracks, query, tagQuery, tagMatchMode, tagAliasMap, loopOnly, language]);
 
+  const lap3Candidates = useMemo(() => {
+    const keyword = lap3Query.trim().toLocaleLowerCase();
+    return tracks
+      .filter((track) => track.brstm_url || track.brstm_lap3_url)
+      .filter((track) =>
+        [track.title, track.title_en, track.category].join(" ").toLocaleLowerCase().includes(keyword)
+      )
+      .sort((a, b) => displayTrackTitle(a, language).localeCompare(displayTrackTitle(b, language)));
+  }, [tracks, lap3Query, language]);
+
+  const lap3DraftTrack = lap3DraftTrackId != null ? trackMap.get(lap3DraftTrackId) : null;
+  const lap3DraftValid = Boolean(lap3DraftTrack && brstmForVersion(lap3DraftTrack, lap3DraftVersion));
+
+  function openLap3Editor(slot: Slot) {
+    const existing = lap3Overrides[assignmentKey(slot)];
+    setLap3EditorSlot(slot);
+    setLap3DraftTrackId(existing?.trackId ?? null);
+    setLap3DraftVersion(existing?.version ?? "normal");
+    setLap3Query("");
+  }
+
+  function chooseLap3Track(track: PackTrack) {
+    const version = brstmForVersion(track, lap3DraftVersion)
+      ? lap3DraftVersion
+      : track.brstm_url ? "normal" : "lap3";
+    setLap3DraftTrackId(track.id);
+    setLap3DraftVersion(version);
+  }
+
+  function saveLap3Editor() {
+    if (!lap3EditorSlot || !lap3DraftTrack || !lap3DraftValid) return;
+    const key = assignmentKey(lap3EditorSlot);
+    setLap3Overrides((current) => ({
+      ...current,
+      [key]: { trackId: lap3DraftTrack.id, version: lap3DraftVersion },
+    }));
+    setLap3EditorSlot(null);
+  }
+
+  function clearLap3Override(slot: Slot) {
+    const key = assignmentKey(slot);
+    setLap3Overrides((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
   const assignedKeys = Object.keys(assignments).filter(
     (key) => assignments[key] != null
   );
@@ -379,6 +443,7 @@ export default function PackCreator({
       delete next[key];
       return next;
     });
+    clearLap3Override(slot);
   }
 
   function handleDrop(slot: Slot, event: DragEvent<HTMLDivElement>) {
@@ -458,22 +523,26 @@ export default function PackCreator({
 
         if (slot.supportsLap3) {
           const lap3Name = lap3OutputName(slot.outputNormal);
+          const override = lap3Overrides[key];
+          const lap3Track = override ? trackMap.get(override.trackId) : track;
+          const lap3Version = override?.version ?? "lap3";
+          const lap3Url = lap3Track ? brstmForVersion(lap3Track, lap3Version) : "";
 
-          if (track.brstm_lap3_url && lap3Name) {
+          if (lap3Url && lap3Name) {
             const outputLap3 = `${lap3Name}.brstm`;
 
             if (!outputNames.has(outputLap3)) {
               outputNames.add(outputLap3);
               downloadJobs.push({
-                url: track.brstm_lap3_url,
+                url: lap3Url,
                 name: outputLap3,
-                sourceLabel: `${displayTrackTitle(track, language)} Lap 3`,
+                sourceLabel: `${displayTrackTitle(lap3Track!, language)} (${lap3Version === "normal" ? "L1–2" : "L3"})`,
               });
             }
           } else {
             missing.push(
               `${language === "ja" ? slot.ja : slot.en}: ${
-                language === "ja" ? "Lap 3 BRSTMなし" : "Lap 3 BRSTM missing"
+                language === "ja" ? "指定した3周目BRSTMなし" : "selected Lap 3 BRSTM missing"
               }`
             );
           }
@@ -554,9 +623,12 @@ export default function PackCreator({
     const key = assignmentKey(slot);
     const trackId = assignments[key];
     const track = trackId != null ? trackMap.get(trackId) : undefined;
-    const hasMissingLap3 =
-      Boolean(track) && slot.supportsLap3 && !track?.brstm_lap3_url;
+    const override = slot.supportsLap3 ? lap3Overrides[key] : undefined;
+    const lap3Track = override ? trackMap.get(override.trackId) : track;
+    const lap3Version = override?.version ?? "lap3";
+    const missingLap3 = Boolean(track && slot.supportsLap3 && (!lap3Track || !brstmForVersion(lap3Track, lap3Version)));
     const isShared = Boolean(slot.assignmentKey);
+    const lap3PreviewUrl = lap3Track ? previewForVersion(lap3Track, lap3Version) : "";
 
     return (
       <div
@@ -581,79 +653,110 @@ export default function PackCreator({
               )}
             </div>
           </div>
-
           {slot.icon && (
-            <img
-              className={styles.smallSlotIcon}
-              src={slot.icon}
-              alt=""
-            />
+            <img className={styles.smallSlotIcon} src={slot.icon} alt="" />
           )}
         </div>
 
         {isShared && (
           <div className={styles.sharedBadge}>
-            {language === "ja"
-              ? "ルイージ/マリオ共通"
-              : "Shared with Luigi/Mario Circuit"}
+            {language === "ja" ? "ルイージ/マリオ共通" : "Shared with Luigi/Mario Circuit"}
           </div>
         )}
 
         {track ? (
-          <div className={styles.assignedTrack}>
-            <div className={styles.assignedTitleRow}>
-              <span
-                className={`${styles.loopIcon} ${
-                  hasLoop(track) ? styles.loopOn : styles.loopOff
-                }`}
-                title={hasLoop(track) ? "Loop" : "No Loop"}
-                aria-label={hasLoop(track) ? "Loop" : "No Loop"}
-              >
-                ↻
-              </span>
-
-              <div className={styles.assignedTitle}>
-                {displayTrackTitle(track, language)}
+          <>
+            <div className={styles.assignedTrack}>
+              <div className={styles.assignedTitleRow}>
+                <span
+                  className={`${styles.loopIcon} ${hasLoop(track) ? styles.loopOn : styles.loopOff}`}
+                  title={hasLoop(track) ? "Loop" : "No Loop"}
+                  aria-label={hasLoop(track) ? "Loop" : "No Loop"}
+                >
+                  ↻
+                </span>
+                <div className={styles.assignedTitle}>{displayTrackTitle(track, language)}</div>
               </div>
-            </div>
-
-            <div className={styles.assignedActions}>
-              {track.preview_url && (
+              <div className={styles.assignedActions}>
+                {track.preview_url && (
+                  <button
+                    type="button"
+                    aria-label={language === "ja" ? "通常版を試聴" : "Preview regular version"}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onPreview(track, track.preview_url, `pack-${slot.id}`);
+                    }}
+                  >
+                    {playingKey === `${track.id}-pack-${slot.id}` ? "■" : "▶"}
+                  </button>
+                )}
                 <button
                   type="button"
+                  aria-label={language === "ja" ? "割り当てを解除" : "Remove assignment"}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onPreview(track, track.preview_url, `pack-${slot.id}`);
+                    clearSlot(slot);
                   }}
                 >
-                  {playingKey === `${track.id}-pack-${slot.id}` ? "■" : "▶"}
+                  ×
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  clearSlot(slot);
-                }}
-              >
-                ×
-              </button>
+              </div>
             </div>
 
-            {hasMissingLap3 && (
-              <div className={styles.warning}>
-                {language === "ja"
-                  ? "Lap 3が未登録"
-                  : "Lap 3 missing"}
+            {slot.supportsLap3 && (
+              <div className={styles.lap3Control}>
+                {override && lap3Track ? (
+                  <div className={styles.lap3Assigned}>
+                    <div className={styles.lap3AssignedText}>
+                      <span className={styles.lap3Tag}>L3</span>
+                      <span>{displayTrackTitle(lap3Track, language)}</span>
+                      <span className={styles.sourceBadge}>{lap3Version === "normal" ? "L1–2" : "L3"}</span>
+                    </div>
+                    <div className={styles.lap3Actions}>
+                      {lap3PreviewUrl && (
+                        <button
+                          type="button"
+                          aria-label={language === "ja" ? "3周目の曲を試聴" : "Preview final lap"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onPreview(lap3Track, lap3PreviewUrl, `pack-lap3-slot-${key}-${lap3Version}`);
+                          }}
+                        >
+                          {playingKey === `${lap3Track.id}-pack-lap3-slot-${key}-${lap3Version}` ? "■" : "▶"}
+                        </button>
+                      )}
+                      <button type="button" onClick={(event) => { event.stopPropagation(); openLap3Editor(slot); }}>
+                        {language === "ja" ? "変更" : "Change"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); clearLap3Override(slot); }}
+                        aria-label={language === "ja" ? "3周目の別曲設定を解除" : "Remove final lap override"}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className={styles.lap3ChangeButton}
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); openLap3Editor(slot); }}
+                  >
+                    {language === "ja" ? "3周目で曲を変える" : "Change music on Lap 3"}
+                  </button>
+                )}
+                {missingLap3 && (
+                  <div className={styles.warning}>
+                    {language === "ja" ? "3周目のBRSTMが未登録" : "Final lap BRSTM missing"}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         ) : (
           <div className={styles.emptySlot}>
-            {language === "ja"
-              ? "曲をここへドラッグ"
-              : "Drop a track here"}
+            {language === "ja" ? "曲をここへドラッグ" : "Drop a track here"}
           </div>
         )}
       </div>
@@ -847,7 +950,11 @@ export default function PackCreator({
               <button
                 className={styles.resetButton}
                 type="button"
-                onClick={() => setAssignments({})}
+                onClick={() => {
+                  setAssignments({});
+                  setLap3Overrides({});
+                  setLap3EditorSlot(null);
+                }}
                 disabled={building || assignedKeys.length === 0}
               >
                 {language === "ja" ? "リセット" : "Reset"}
@@ -955,6 +1062,122 @@ export default function PackCreator({
           </div>
         </div>
       </div>
+      {lap3EditorSlot && (
+        <div className={styles.lap3Backdrop} onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setLap3EditorSlot(null);
+        }}>
+          <div
+            className={styles.lap3Dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lap3-picker-title"
+            onKeyDown={(event) => { if (event.key === "Escape") setLap3EditorSlot(null); }}
+          >
+            <div className={styles.lap3DialogHeader}>
+              <div>
+                <div className={styles.eyebrow}>LAP 3 MUSIC</div>
+                <h2 id="lap3-picker-title">
+                  {language === "ja" ? "3周目で曲を変える" : "Change music on Lap 3"}
+                </h2>
+                <p>{language === "ja" ? lap3EditorSlot.ja : lap3EditorSlot.en}</p>
+              </div>
+              <button type="button" onClick={() => setLap3EditorSlot(null)} aria-label={language === "ja" ? "閉じる" : "Close"}>×</button>
+            </div>
+            <div className={styles.lap3DialogBody}>
+              <div className={styles.lap3Library}>
+                <input
+                  className={styles.search}
+                  type="search"
+                  value={lap3Query}
+                  onChange={(event) => setLap3Query(event.target.value)}
+                  placeholder={language === "ja" ? "3周目に使う曲を検索" : "Search final-lap music"}
+                  aria-label={language === "ja" ? "曲を検索" : "Search tracks"}
+                />
+                <div className={styles.lap3TrackList}>
+                  {lap3Candidates.map((track) => (
+                    <div
+                      key={track.id}
+                      className={`${styles.lap3TrackRow} ${lap3DraftTrackId === track.id ? styles.lap3TrackSelected : ""}`}
+                    >
+                      <button className={styles.lap3TrackSelect} type="button" onClick={() => chooseLap3Track(track)} aria-pressed={lap3DraftTrackId === track.id}>
+                        <strong>{displayTrackTitle(track, language)}</strong>
+                        <small>{[track.brstm_url && "L1–2", track.brstm_lap3_url && "L3"].filter(Boolean).join(" / ")}</small>
+                      </button>
+                      <div className={styles.lap3TrackPreviews}>
+                        {(["normal", "lap3"] as const).map((version) => {
+                          const url = previewForVersion(track, version);
+                          const key = `${track.id}-pack-lap3-picker-${version}`;
+                          return (
+                            <button
+                              key={version}
+                              type="button"
+                              disabled={!url}
+                              title={url ? (language === "ja" ? "試聴" : "Preview") : (language === "ja" ? "試聴なし" : "No preview")}
+                              onClick={() => { if (url) onPreview(track, url, `pack-lap3-picker-${version}`); }}
+                            >
+                              {playingKey === key ? "■" : "▶"} {version === "normal" ? "1–2" : "L3"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  {lap3Candidates.length === 0 && (
+                    <p className={styles.lap3Empty}>{language === "ja" ? "該当する曲はありません" : "No matching tracks"}</p>
+                  )}
+                </div>
+              </div>
+              <div className={styles.lap3Detail}>
+                {lap3DraftTrack ? (
+                  <>
+                    <strong className={styles.lap3DetailTitle}>{displayTrackTitle(lap3DraftTrack, language)}</strong>
+                    <div className={styles.lap3VersionList}>
+                      {(["normal", "lap3"] as const).map((version) => {
+                        const available = Boolean(brstmForVersion(lap3DraftTrack, version));
+                        const selected = lap3DraftVersion === version;
+                        const previewUrl = previewForVersion(lap3DraftTrack, version);
+                        const previewLabel = `pack-lap3-picker-${version}`;
+                        return (
+                          <div className={`${styles.lap3VersionRow} ${selected ? styles.lap3VersionSelected : ""}`} key={version}>
+                            <button
+                              className={styles.lap3VersionSelect}
+                              type="button"
+                              disabled={!available}
+                              aria-pressed={selected}
+                              onClick={() => setLap3DraftVersion(version)}
+                            >
+                              <span aria-hidden="true">{selected ? "◉" : "○"}</span>
+                              <span>{version === "normal"
+                                ? (language === "ja" ? "この曲のL1–2を使用" : "Use this track's L1–2")
+                                : (language === "ja" ? "この曲のL3を使用" : "Use this track's L3")}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.lap3PreviewButton}
+                              disabled={!previewUrl}
+                              onClick={() => { if (previewUrl) onPreview(lap3DraftTrack, previewUrl, previewLabel); }}
+                            >
+                              {playingKey === `${lap3DraftTrack.id}-${previewLabel}` ? "■" : "▶"} {language === "ja" ? "試聴" : "Preview"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <p className={styles.lap3Empty}>{language === "ja" ? "左から3周目の曲を選択" : "Select the final-lap track"}</p>
+                )}
+                <div className={styles.lap3DialogActions}>
+                  <button type="button" onClick={() => setLap3EditorSlot(null)}>{language === "ja" ? "キャンセル" : "Cancel"}</button>
+                  <button type="button" className={styles.saveButton} disabled={!lap3DraftValid} onClick={saveLap3Editor}>
+                    {language === "ja" ? "3周目に割り当てる" : "Assign to Lap 3"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
