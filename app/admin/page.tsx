@@ -65,6 +65,9 @@ type BulkTitleSuggestion = {
   titleEn: string;
   source: "filename" | "registered";
   score: number;
+  trackId?: number;
+  previewUrl?: string;
+  previewLap3Url?: string;
 };
 
 /** Preview availability follows the assigned file roles, not the original file names. */
@@ -444,11 +447,21 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
   const suggestions: BulkTitleSuggestion[] = [];
   const add = (candidate: BulkTitleSuggestion) => {
     if (!candidate.title.trim() || !candidate.titleEn.trim()) return;
-    if (candidate.title === group.title && candidate.titleEn === group.titleEn) return;
-    if (suggestions.some((item) =>
+    if (candidate.source === "filename" && candidate.title === group.title &&
+      candidate.titleEn === group.titleEn) return;
+    const existingIndex = suggestions.findIndex((item) =>
       normalizeCompareName(item.title) === normalizeCompareName(candidate.title) &&
       normalizeCompareName(item.titleEn) === normalizeCompareName(candidate.titleEn)
-    )) return;
+    );
+    if (existingIndex !== -1) {
+      // A registered match is more useful than a filename-only suggestion,
+      // because its existing MP3 can be auditioned.
+      if (candidate.source === "registered" &&
+        suggestions[existingIndex].source === "filename") {
+        suggestions[existingIndex] = candidate;
+      }
+      return;
+    }
     suggestions.push(candidate);
   };
 
@@ -463,16 +476,20 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
   }
 
   for (const track of tracks) {
-    if (!track.title?.trim() || !track.title_en?.trim()) continue;
+    if (!track.title?.trim()) continue;
+    const knownNames = [track.title, track.title_en].filter(Boolean);
     const matchedScore = Math.max(0, ...names.flatMap((name) =>
-      [track.title, track.title_en].map((known) => titleSimilarity(name, known))
+      knownNames.map((known) => titleSimilarity(name, known))
     ));
     if (matchedScore >= 0.88) {
       add({
         title: track.title.trim(),
-        titleEn: track.title_en.trim(),
+        titleEn: track.title_en?.trim() || track.title.trim(),
         source: "registered",
         score: matchedScore,
+        trackId: track.id,
+        previewUrl: track.preview_url || "",
+        previewLap3Url: track.preview_lap3_url || "",
       });
     }
   }
@@ -545,6 +562,7 @@ export default function AdminPage() {
   const [adminPlayingKey, setAdminPlayingKey] = useState<string | null>(null);
   const adminAudioRef = useRef<HTMLAudioElement | null>(null);
   const adminPlayingKeyRef = useRef<string | null>(null);
+  const adminObjectUrlRef = useRef<string | null>(null);
   const [tagSortMode, setTagSortMode] = useState<"alphabetical" | "newest" | "count">("alphabetical");
   const [tagSortDirection, setTagSortDirection] = useState<"asc" | "desc">("asc");
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReviewItem[]>([]);
@@ -796,80 +814,100 @@ export default function AdminPage() {
     checkLogin();
   }, [router]);
 
+  function stopAdminAudio() {
+    // Release the player before pausing, so stale events and play() promises
+    // cannot change the state of a newer preview.
+    const oldAudio = adminAudioRef.current;
+    const oldObjectUrl = adminObjectUrlRef.current;
+    adminAudioRef.current = null;
+    adminPlayingKeyRef.current = null;
+    adminObjectUrlRef.current = null;
+    oldAudio?.pause();
+    if (oldAudio) oldAudio.currentTime = 0;
+    if (oldObjectUrl) URL.revokeObjectURL(oldObjectUrl);
+    setAdminPlayingKey(null);
+  }
+
   useEffect(() => {
     return () => {
-      if (adminAudioRef.current) {
-        adminAudioRef.current.pause();
-        adminAudioRef.current = null;
-      }
+      adminAudioRef.current?.pause();
+      if (adminObjectUrlRef.current) URL.revokeObjectURL(adminObjectUrlRef.current);
+      adminAudioRef.current = null;
+      adminPlayingKeyRef.current = null;
+      adminObjectUrlRef.current = null;
     };
   }, []);
 
-  async function handleAdminPreview(
-    track: Track,
-    previewUrl: string,
-    variant: "normal" | "lap3"
-  ) {
+  async function playAdminAudio(key: string, source: string | File) {
+    const wasSamePreview = adminPlayingKeyRef.current === key &&
+      adminAudioRef.current !== null;
+    stopAdminAudio();
+    if (wasSamePreview) return;
+
+    let objectUrl: string | null = null;
+    let audio: HTMLAudioElement | null = null;
+    try {
+      if (source instanceof File) objectUrl = URL.createObjectURL(source);
+      audio = new Audio(objectUrl ?? (source as string));
+      const savedVolume = Number(window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5");
+      audio.volume = Number.isFinite(savedVolume)
+        ? Math.min(0.5, Math.max(0, savedVolume))
+        : 0.5;
+
+      const clear = () => {
+        if (adminAudioRef.current !== audio) return;
+        stopAdminAudio();
+      };
+      audio.addEventListener("ended", clear);
+      audio.addEventListener("error", () => {
+        if (adminAudioRef.current !== audio) return;
+        clear();
+        setMessage("プレビューを再生できませんでした。");
+      });
+
+      adminAudioRef.current = audio;
+      adminPlayingKeyRef.current = key;
+      adminObjectUrlRef.current = objectUrl;
+      setAdminPlayingKey(key);
+      await audio.play();
+    } catch (error) {
+      // Check Audio identity, not just the key: the same button may have
+      // been started again before an older play() promise settles.
+      if (!audio) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        console.error("Admin preview initialization failed:", error);
+        setMessage("プレビューを再生できませんでした。");
+        return;
+      }
+      if (adminAudioRef.current !== audio) {
+        if (objectUrl && adminObjectUrlRef.current !== objectUrl) URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      console.error("Admin preview failed:", error);
+      stopAdminAudio();
+      setMessage("プレビューを再生できませんでした。");
+    }
+  }
+
+  function handleAdminPreview(track: Track, previewUrl: string, variant: "normal" | "lap3") {
     if (!previewUrl) {
       setMessage(variant === "normal"
         ? "通常プレビューMP3が登録されていません。"
         : "Lap 3プレビューMP3が登録されていません。");
       return;
     }
+    void playAdminAudio(`${track.id}-${variant}`, previewUrl);
+  }
 
-    const key = `${track.id}-${variant}`;
-    const previousAudio = adminAudioRef.current;
-    const wasSamePreview = adminPlayingKeyRef.current === key && previousAudio !== null;
+  function handleQueuedMp3Preview(file: BulkGroupFile) {
+    if (file.extension !== "mp3") return;
+    void playAdminAudio(`upload-file-${file.id}`, file.file);
+  }
 
-    // Disown the previous Audio before pausing: its async callbacks must not
-    // clear the new player after a rapid track switch.
-    adminAudioRef.current = null;
-    adminPlayingKeyRef.current = null;
-    if (previousAudio) {
-      previousAudio.pause();
-      previousAudio.currentTime = 0;
-    }
-
-    if (wasSamePreview) {
-      setAdminPlayingKey(null);
-      return;
-    }
-
-    const audio = new Audio(previewUrl);
-    const savedVolume = Number(window.localStorage.getItem("kei-brstm-hub-volume") ?? "0.5");
-    audio.volume = Number.isFinite(savedVolume)
-      ? Math.min(0.5, Math.max(0, savedVolume))
-      : 0.5;
-
-    audio.addEventListener("ended", () => {
-      if (adminAudioRef.current !== audio) return;
-      adminAudioRef.current = null;
-      adminPlayingKeyRef.current = null;
-      setAdminPlayingKey(null);
-    });
-
-    audio.addEventListener("error", () => {
-      if (adminAudioRef.current !== audio) return;
-      adminAudioRef.current = null;
-      adminPlayingKeyRef.current = null;
-      setAdminPlayingKey(null);
-      setMessage("プレビューを再生できませんでした。");
-    });
-
-    adminAudioRef.current = audio;
-    adminPlayingKeyRef.current = key;
-    setAdminPlayingKey(key);
-
-    try {
-      await audio.play();
-    } catch (error) {
-      if (adminAudioRef.current !== audio) return;
-      console.error("Admin preview failed:", error);
-      adminAudioRef.current = null;
-      adminPlayingKeyRef.current = null;
-      setAdminPlayingKey(null);
-      setMessage("プレビューを再生できませんでした。");
-    }
+  function handleDuplicatePreview(suggestion: BulkTitleSuggestion, variant: "normal" | "lap3") {
+    const url = variant === "normal" ? suggestion.previewUrl : suggestion.previewLap3Url;
+    if (!url || suggestion.trackId === undefined) return;
+    void playAdminAudio(`duplicate-${suggestion.trackId}-${variant}`, url);
   }
 
   async function loadTracks() {
@@ -1116,6 +1154,7 @@ export default function AdminPage() {
 
   function handleBulkFiles(files: FileList | null) {
     if (!files) return;
+    stopAdminAudio();
 
     const groups = buildBulkGroups(Array.from(files));
     setBulkGroups(groups);
@@ -1850,6 +1889,9 @@ export default function AdminPage() {
     if (bulkUploading) return;
     const group = bulkGroups.find((item) => item.key === groupKey);
     if (!group || group.status === "done") return;
+    if (group.files.some((item) => adminPlayingKeyRef.current === `upload-file-${item.id}`)) {
+      stopAdminAudio();
+    }
 
     // Remove this local pending group only; uploaded tracks and files are untouched.
     setBulkGroups((current) => current.filter((item) => item.key !== groupKey));
@@ -2297,27 +2339,64 @@ export default function AdminPage() {
                           />
                         </label>
 
-                        {(bulkTitleSuggestions.get(group.key)?.length ?? 0) > 0 && (
-                          <div className="bulkTitleSuggestions">
-                            <span className="bulkTitleSuggestionHeading">曲名候補</span>
-                            {bulkTitleSuggestions.get(group.key)?.map((suggestion, index) => (
-                              <button
-                                key={`${group.key}-title-${index}`}
-                                className="secondaryButton bulkTitleSuggestion"
-                                type="button"
-                                title={suggestion.source === "registered" ? "登録済みの曲名" : "ファイル名から抽出"}
-                                onClick={() => updateBulkGroup(group.key, {
-                                  title: suggestion.title,
-                                  titleEn: suggestion.titleEn,
-                                })}
-                              >
-                                <span>{suggestion.title}</span>
-                                <span>{suggestion.titleEn}</span>
-                                <small>{suggestion.source === "registered" ? "登録済み" : "ファイル名"}</small>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {(["registered", "filename"] as const).map((source) => {
+                          const suggestions = (bulkTitleSuggestions.get(group.key) ?? [])
+                            .filter((item) => item.source === source);
+                          if (!suggestions.length) return null;
+                          return (
+                            <div className="bulkTitleSuggestions" key={source}>
+                              <span className="bulkTitleSuggestionHeading">
+                                {source === "registered" ? "重複候補" : "ファイル名候補"}
+                              </span>
+                              {suggestions.map((suggestion, index) => (
+                                <div className="bulkTitleCandidate" key={suggestion.trackId ?? index}>
+                                  <button
+                                    className="secondaryButton bulkTitleSuggestion"
+                                    type="button"
+                                    title="この曲名を入力欄へ反映"
+                                    onClick={() => updateBulkGroup(group.key, {
+                                      title: suggestion.title,
+                                      titleEn: suggestion.titleEn,
+                                    })}
+                                  >
+                                    <span>{suggestion.title}</span>
+                                    <span>{suggestion.titleEn}</span>
+                                    <small>名前を適用</small>
+                                  </button>
+                                  {source === "registered" && (
+                                    <div className="bulkDuplicatePreviews">
+                                      {suggestion.previewUrl && (
+                                        <button
+                                          className="secondaryButton adminBulkPreviewButton"
+                                          type="button"
+                                          onClick={() => handleDuplicatePreview(suggestion, "normal")}
+                                          title="登録済み曲の通常MP3を試聴"
+                                        >
+                                          {adminPlayingKey === `duplicate-${suggestion.trackId}-normal`
+                                            ? "■ 停止" : "▶ 通常"}
+                                        </button>
+                                      )}
+                                      {suggestion.previewLap3Url && (
+                                        <button
+                                          className="secondaryButton adminBulkPreviewButton"
+                                          type="button"
+                                          onClick={() => handleDuplicatePreview(suggestion, "lap3")}
+                                          title="登録済み曲のLap 3 MP3を試聴"
+                                        >
+                                          {adminPlayingKey === `duplicate-${suggestion.trackId}-lap3`
+                                            ? "■ 停止" : "▶ L3"}
+                                        </button>
+                                      )}
+                                      {!suggestion.previewUrl && !suggestion.previewLap3Url && (
+                                        <small className="bulkDuplicateNoPreview">MP3未登録</small>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
 
                         <label className="formLabel">
                           カテゴリ
@@ -2419,21 +2498,29 @@ export default function AdminPage() {
                                 {getRoleLabel(item.role)}
                               </div>
 
-                              {group.files.length > 1 && (
-                                <button
-                                  className="secondaryButton"
-                                  style={{
-                                    marginTop: "7px",
-                                    padding: "6px 9px",
-                                    fontSize: "11px",
-                                  }}
-                                  type="button"
-                                  onClick={() => splitBulkFile(group.key, item.id)}
-                                  disabled={bulkUploading || group.status === "done"}
-                                >
-                                  別の曲として分離
-                                </button>
-                              )}
+                              <div className="adminBulkFileActions">
+                                {item.extension === "mp3" && (
+                                  <button
+                                    className="secondaryButton adminBulkPreviewButton"
+                                    type="button"
+                                    onClick={() => handleQueuedMp3Preview(item)}
+                                    title="アップロード待機中のMP3を試聴"
+                                  >
+                                    {adminPlayingKey === `upload-file-${item.id}`
+                                      ? "■ 停止" : "▶ MP3試聴"}
+                                  </button>
+                                )}
+                                {group.files.length > 1 && (
+                                  <button
+                                    className="secondaryButton adminBulkPreviewButton"
+                                    type="button"
+                                    onClick={() => splitBulkFile(group.key, item.id)}
+                                    disabled={bulkUploading || group.status === "done"}
+                                  >
+                                    別の曲として分離
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             <label className="formLabel">
