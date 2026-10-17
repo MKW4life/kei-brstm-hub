@@ -2051,8 +2051,8 @@ export default function AdminPage() {
       <main className="main">
         <nav className="adminSectionNav" aria-label="管理画面の項目">
           {[
-            { id: "admin-packs", label: "ZIPパック追加" },
             { id: "admin-bulk", label: "BRSTM一括追加" },
+            { id: "admin-packs", label: "ZIPパック追加" },
             { id: "admin-missing-previews", label: `⚠️ プレビュー未登録 (${missingPreviewTracks.length})` },
             { id: "admin-tracks", label: "登録済みの曲" },
             { id: "admin-tags", label: "タグ管理" },
@@ -2066,112 +2066,6 @@ export default function AdminPage() {
             </a>
           ))}
         </nav>
-
-        <details className="adminPanel wide adminCollapsiblePanel" id="admin-packs" open>
-          <summary className="adminSectionSummary">
-            <span className="adminSectionSummaryTitle">
-              <span className="label">ZIP MUSIC PACK</span>
-              <span className="adminTitle">ZIPパックを追加</span>
-            </span>
-            <span className="adminSectionChevron" aria-hidden="true" />
-          </summary>
-          <div className="adminSectionBody">
-
-          <form className="adminForm" onSubmit={handlePackSubmit}>
-            <div className="formGrid">
-              <label className="formLabel">
-                パック名
-                <input
-                  className="formInput"
-                  value={packTitle}
-                  onChange={(event) => setPackTitle(event.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="formLabel">
-                YouTubeプレビューURL
-                <input
-                  className="formInput"
-                  value={packYoutubeUrl}
-                  onChange={(event) => setPackYoutubeUrl(event.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
-              </label>
-
-              <label className="formLabel">
-                ZIP URL
-                <input
-                  className="formInput"
-                  type="url"
-                  value={packZipUrl}
-                  onChange={(event) => setPackZipUrl(event.target.value)}
-                  placeholder="https://github.com/.../releases/download/.../pack.zip"
-                  required
-                />
-              </label>
-
-              <label className="formLabel checkboxLabel">
-                <input
-                  type="checkbox"
-                  checked={packPublished}
-                  onChange={(event) => setPackPublished(event.target.checked)}
-                />
-                公開する
-              </label>
-            </div>
-
-            <AdminTagPicker
-              label="タグ"
-              value={packTags}
-              onChange={setPackTags}
-              suggestions={tagPickerSuggestions}
-            />
-
-            <button
-              className="primaryButton fullButton"
-              type="submit"
-              disabled={packSubmitting}
-            >
-              {packSubmitting ? "登録中..." : "ZIPパックを追加"}
-            </button>
-          </form>
-
-          {packs.length > 0 && (
-            <div className="adminTrackList" style={{ marginTop: "24px" }}>
-              {packs.map((pack) => (
-                <article className="adminTrackCard" key={pack.id}>
-                  <div>
-                    <h3>{pack.title}</h3>
-                    {pack.tags && renderTags(pack.tags)}
-                    <p>YouTube: {pack.youtube_url || "未設定"}</p>
-                    <p>ZIP URL: {pack.zip_url || "未設定"}</p>
-                    <p>{pack.is_published ? "公開中" : "非公開"}</p>
-                  </div>
-
-                  <div className="adminActions">
-                    <button
-                      className="secondaryButton"
-                      type="button"
-                      onClick={() => handlePackTogglePublish(pack)}
-                    >
-                      {pack.is_published ? "非公開にする" : "公開する"}
-                    </button>
-
-                    <button
-                      className="dangerButton"
-                      type="button"
-                      onClick={() => handlePackDelete(pack)}
-                    >
-                      削除
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-          </div>
-        </details>
 
         <details className="adminPanel wide adminCollapsiblePanel" id="admin-bulk" open>
           <summary className="adminSectionSummary">
@@ -2492,6 +2386,111 @@ export default function AdminPage() {
           </div>
         </details>
 
+        <details className="adminPanel wide adminCollapsiblePanel" id="admin-packs" open>
+          <summary className="adminSectionSummary">
+            <span className="adminSectionSummaryTitle">
+              <span className="label">ZIP MUSIC PACK</span>
+              <span className="adminTitle">ZIPパックを追加</span>
+            </span>
+            <span className="adminSectionChevron" aria-hidden="true" />
+          </summary>
+          <div className="adminSectionBody">
+
+          <form className="adminForm" onSubmit={handlePackSubmit}>
+            <div className="formGrid">
+              <label className="formLabel">
+                パック名
+                <input
+                  className="formInput"
+                  value={packTitle}
+                  onChange={(event) => setPackTitle(event.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="formLabel">
+                YouTubeプレビューURL
+                <input
+                  className="formInput"
+                  value={packYoutubeUrl}
+                  onChange={(event) => setPackYoutubeUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </label>
+
+              <label className="formLabel">
+                ZIP URL
+                <input
+                  className="formInput"
+                  type="url"
+                  value={packZipUrl}
+                  onChange={(event) => setPackZipUrl(event.target.value)}
+                  placeholder="https://github.com/.../releases/download/.../pack.zip"
+                  required
+                />
+              </label>
+
+              <label className="formLabel checkboxLabel">
+                <input
+                  type="checkbox"
+                  checked={packPublished}
+                  onChange={(event) => setPackPublished(event.target.checked)}
+                />
+                公開する
+              </label>
+            </div>
+
+            <AdminTagPicker
+              label="タグ"
+              value={packTags}
+              onChange={setPackTags}
+              suggestions={tagPickerSuggestions}
+            />
+
+            <button
+              className="primaryButton fullButton"
+              type="submit"
+              disabled={packSubmitting}
+            >
+              {packSubmitting ? "登録中..." : "ZIPパックを追加"}
+            </button>
+          </form>
+
+          {packs.length > 0 && (
+            <div className="adminTrackList" style={{ marginTop: "24px" }}>
+              {packs.map((pack) => (
+                <article className="adminTrackCard" key={pack.id}>
+                  <div>
+                    <h3>{pack.title}</h3>
+                    {pack.tags && renderTags(pack.tags)}
+                    <p>YouTube: {pack.youtube_url || "未設定"}</p>
+                    <p>ZIP URL: {pack.zip_url || "未設定"}</p>
+                    <p>{pack.is_published ? "公開中" : "非公開"}</p>
+                  </div>
+
+                  <div className="adminActions">
+                    <button
+                      className="secondaryButton"
+                      type="button"
+                      onClick={() => handlePackTogglePublish(pack)}
+                    >
+                      {pack.is_published ? "非公開にする" : "公開する"}
+                    </button>
+
+                    <button
+                      className="dangerButton"
+                      type="button"
+                      onClick={() => handlePackDelete(pack)}
+                    >
+                      削除
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+          </div>
+        </details>
 
         <details className="adminPanel wide adminCollapsiblePanel" id="admin-missing-previews" open>
           <summary className="adminSectionSummary">
