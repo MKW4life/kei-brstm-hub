@@ -453,6 +453,8 @@ export default function AdminPage() {
   const [bulkTagApplying, setBulkTagApplying] = useState(false);
   const [pendingUploadGroupKeys, setPendingUploadGroupKeys] = useState<string[]>([]);
   const [hideCompletedBulkGroups, setHideCompletedBulkGroups] = useState(true);
+  const [missingPreviewQuery, setMissingPreviewQuery] = useState("");
+  const [missingPreviewLimit, setMissingPreviewLimit] = useState(50);
 
   const tagSuggestions = useMemo(() => {
     const allTags = [
@@ -561,6 +563,22 @@ export default function AdminPage() {
         matchesTagSearch(track.tags, adminTrackTagQuery, adminTrackTagMode)
       );
   }, [tracks, adminTrackQuery, adminTrackTagQuery, adminTrackTagMode, tagAliasMap]);
+
+  const missingPreviewTracks = useMemo(
+    () => tracks.filter((track) => getMissingTrackPreviews(track).length > 0),
+    [tracks]
+  );
+
+  const matchingMissingPreviews = useMemo(() => {
+    const query = missingPreviewQuery.trim().toLocaleLowerCase();
+    if (!query) return missingPreviewTracks;
+    return missingPreviewTracks.filter((track) =>
+      [track.title, track.title_en, track.category, track.tags]
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(query)
+    );
+  }, [missingPreviewTracks, missingPreviewQuery]);
 
   const hasAdminTrackFilter =
     Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim());
@@ -1740,6 +1758,30 @@ export default function AdminPage() {
     await loadPacks();
   }
 
+  function navigateToAdminSection(sectionId: string) {
+    const section = document.getElementById(sectionId);
+    if (section instanceof HTMLDetailsElement) {
+      section.open = true;
+    }
+    requestAnimationFrame(() => {
+      section?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function editMissingPreview(track: Track) {
+    startEdit(track);
+    setAdminTrackQuery(track.title);
+    setAdminTrackTagQuery("");
+    const section = document.getElementById("admin-tracks");
+    if (section instanceof HTMLDetailsElement) section.open = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        (document.getElementById(`admin-track-${track.id}`) || section)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+  }
+
   function startEdit(track: Track) {
     setMessage("");
     setEditingTrackId(track.id);
@@ -1942,9 +1984,33 @@ export default function AdminPage() {
       </header>
 
       <main className="main">
-        <section className="adminPanel wide">
-          <p className="label">ZIP MUSIC PACK</p>
-          <h1 className="adminTitle">ZIPパックを追加</h1>
+        <nav className="adminSectionNav" aria-label="管理画面の項目">
+          {[
+            { id: "admin-packs", label: "ZIPパック追加" },
+            { id: "admin-bulk", label: "BRSTM一括追加" },
+            { id: "admin-missing-previews", label: `⚠️ プレビュー未登録 (${missingPreviewTracks.length})` },
+            { id: "admin-tracks", label: "登録済みの曲" },
+            { id: "admin-tags", label: "タグ管理" },
+          ].map((item) => (
+            <a
+              href={`#${item.id}`}
+              key={item.id}
+              onClick={() => navigateToAdminSection(item.id)}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+
+        <details className="adminPanel wide adminCollapsiblePanel" id="admin-packs" open>
+          <summary className="adminSectionSummary">
+            <span className="adminSectionSummaryTitle">
+              <span className="label">ZIP MUSIC PACK</span>
+              <span className="adminTitle">ZIPパックを追加</span>
+            </span>
+            <span className="adminSectionChevron" aria-hidden="true" />
+          </summary>
+          <div className="adminSectionBody">
 
           <form className="adminForm" onSubmit={handlePackSubmit}>
             <div className="formGrid">
@@ -2039,11 +2105,18 @@ export default function AdminPage() {
               ))}
             </div>
           )}
-        </section>
+          </div>
+        </details>
 
-        <section className="adminPanel wide">
-          <p className="label">BULK UPLOAD</p>
-          <h2 className="adminSubTitle">BRSTMをまとめて追加</h2>
+        <details className="adminPanel wide adminCollapsiblePanel" id="admin-bulk" open>
+          <summary className="adminSectionSummary">
+            <span className="adminSectionSummaryTitle">
+              <span className="label">BULK UPLOAD</span>
+              <span className="adminSubTitle">BRSTMをまとめて追加</span>
+            </span>
+            <span className="adminSectionChevron" aria-hidden="true" />
+          </summary>
+          <div className="adminSectionBody">
 
           <p className="formMessage">
             ファイル名の途中に単独の <code>3</code> が入っていても、
@@ -2351,10 +2424,89 @@ export default function AdminPage() {
           <p className="formMessage">
             ※ BRSTM → MP3 の自動変換はまだ未実装です。現在はMP3も一緒に選択した場合に自動割り当てします。
           </p>
-        </section>
+          </div>
+        </details>
 
-        <section className="adminPanel wide">
-          <h2 className="adminSubTitle">登録済みの曲</h2>
+
+        <details className="adminPanel wide adminCollapsiblePanel" id="admin-missing-previews" open>
+          <summary className="adminSectionSummary">
+            <span className="adminSectionSummaryTitle">
+              <span className="label">MISSING PREVIEWS</span>
+              <span className="adminSubTitle">
+                プレビュー未登録の曲
+                <span className="adminSectionCount">{missingPreviewTracks.length}</span>
+              </span>
+            </span>
+            <span className="adminSectionChevron" aria-hidden="true" />
+          </summary>
+          <div className="adminSectionBody">
+            <input
+              className="formInput adminMissingPreviewSearch"
+              type="search"
+              value={missingPreviewQuery}
+              onChange={(event) => {
+                setMissingPreviewQuery(event.target.value);
+                setMissingPreviewLimit(50);
+              }}
+              placeholder="曲名・英語名・タグで検索"
+              aria-label="プレビュー未登録の曲を検索"
+            />
+
+            {matchingMissingPreviews.length === 0 ? (
+              <div className="empty">
+                {missingPreviewQuery.trim()
+                  ? "検索に一致する曲はありません。"
+                  : "プレビュー未登録の曲はありません。"}
+              </div>
+            ) : (
+              <>
+                <div className="adminMissingPreviewList">
+                  {matchingMissingPreviews.slice(0, missingPreviewLimit).map((track) => (
+                    <div key={track.id} className="adminMissingPreviewRow">
+                      <div className="adminMissingPreviewInfo">
+                        <strong>{track.title}</strong>
+                        {track.title_en && track.title_en !== track.title && (
+                          <small>{track.title_en}</small>
+                        )}
+                        <div className="adminMissingPreviewStatus">
+                          {getMissingTrackPreviews(track).map((item) => (
+                            <span key={item} className="adminMissingPreviewTag">⚠️ {item}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        className="secondaryButton"
+                        type="button"
+                        onClick={() => editMissingPreview(track)}
+                      >
+                        プレビューを登録
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {matchingMissingPreviews.length > missingPreviewLimit && (
+                  <button
+                    className="secondaryButton adminMissingPreviewMore"
+                    type="button"
+                    onClick={() => setMissingPreviewLimit((count) => count + 50)}
+                  >
+                    さらに表示（{Math.min(missingPreviewLimit, matchingMissingPreviews.length)} / {matchingMissingPreviews.length}曲）
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </details>
+
+        <details className="adminPanel wide adminCollapsiblePanel" id="admin-tracks" open>
+          <summary className="adminSectionSummary">
+            <span className="adminSectionSummaryTitle">
+              <span className="label">TRACK LIBRARY</span>
+              <span className="adminSubTitle">登録済みの曲</span>
+            </span>
+            <span className="adminSectionChevron" aria-hidden="true" />
+          </summary>
+          <div className="adminSectionBody">
 
           <div
             style={{
@@ -2431,7 +2583,7 @@ export default function AdminPage() {
 
           <div className="adminTrackList">
             {visibleAdminTracks.map((track) => (
-              <article className="adminTrackCard" key={track.id}>
+              <article className="adminTrackCard" key={track.id} id={`admin-track-${track.id}`}>
                 {editingTrackId === track.id ? (
                   <form className="adminForm" onSubmit={handleEditSubmit}>
                     <div className="formGrid">
@@ -2688,11 +2840,18 @@ export default function AdminPage() {
               </div>
             )}
           </div>
-        </section>
+          </div>
+        </details>
 
-        <section className="adminPanel wide">
-          <p className="label">TAG MANAGEMENT</p>
-          <h2 className="adminSubTitle">タグ管理</h2>
+        <details className="adminPanel wide adminCollapsiblePanel" id="admin-tags" open>
+          <summary className="adminSectionSummary">
+            <span className="adminSectionSummaryTitle">
+              <span className="label">TAG MANAGEMENT</span>
+              <span className="adminSubTitle">タグ管理</span>
+            </span>
+            <span className="adminSectionChevron" aria-hidden="true" />
+          </summary>
+          <div className="adminSectionBody">
 
           <p className="formMessage">
             タグ名の変更・削除は、そのタグを使っているすべての曲とMusic Packに反映されます。英語名は空欄なら日本語名をそのまま使います。
@@ -2981,7 +3140,8 @@ export default function AdminPage() {
               ))}
             </div>
           )}
-        </section>
+          </div>
+        </details>
       </main>
 
       {showDuplicateReview && (
