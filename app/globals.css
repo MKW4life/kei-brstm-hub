@@ -981,3 +981,17 @@ a {
   font-size: 12px;
   border-radius: 8px;
 }
+
+.adminDuplicateReviewPreviewRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.adminDuplicateReviewPreviewLabel {
+  flex: none;
+  font-size: 11px;
+  color: #a1a1aa;
+  margin-right: 2px;
+}
