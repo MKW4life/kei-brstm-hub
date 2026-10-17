@@ -40,6 +40,14 @@ type BulkRole =
   | "normalPreview"
   | "lap3Preview";
 
+const bulkRoleDisplayOrder: Record<BulkRole, number> = {
+  normalBrstm: 0,
+  normalPreview: 1,
+  lap3Brstm: 2,
+  lap3Preview: 3,
+  ignore: 4,
+};
+
 type BulkGroupFile = {
   id: string;
   name: string;
@@ -2735,7 +2743,9 @@ export default function AdminPage() {
                           marginTop: "12px",
                         }}
                       >
-                        {group.files.map((item) => (
+                        {[...group.files]
+                          .sort((a, b) => bulkRoleDisplayOrder[a.role] - bulkRoleDisplayOrder[b.role])
+                          .map((item) => (
                           <div
                             key={item.id}
                             style={{
