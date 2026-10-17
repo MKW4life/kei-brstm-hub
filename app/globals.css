@@ -967,3 +967,17 @@ a {
 .adminDuplicateReviewMatch .adminBulkPreviewButton {
   margin-left: auto;
 }
+
+.adminBulkRelatedTags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.adminBulkRelatedTag {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+  border-radius: 8px;
+}

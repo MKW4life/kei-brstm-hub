@@ -291,7 +291,16 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
       };
     }
 
-    // Then try removing a standalone "3" from ANY position.
+    // A fullwidth trailing ３ is an explicit Lap 3 suffix, even without
+    // its normal-lap companion in the selected files.
+    if (item.stem.endsWith("３")) {
+      const baseName = cleanBaseName(item.stem.slice(0, -1));
+      if (baseName) {
+        return { ...item, isLap3: true, baseName };
+      }
+    }
+
+    // Then try removing a standalone "3" or "３" from ANY position.
     // It is treated as Lap 3 only when the resulting name actually exists
     // among the files selected at the same time.
     //
@@ -301,7 +310,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
     //
     // Removing the standalone 3 from the second name produces the first one,
     // so they are safely grouped together.
-    const standaloneThreePattern = /(^|[\s_.-])3(?=$|[\s_.-]|\(|（|\[|【)/g;
+    const standaloneThreePattern = /(^|[\s_.-])[3３](?=$|[\s_.-]|\(|（|\[|【)/g;
 
     const candidates: string[] = [];
     let match: RegExpExecArray | null;
@@ -372,7 +381,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         key,
         title: item.baseName,
         titleEn: "",
-        category: "コースBGM",
+        category: "その他BGM",
         tags: "No tag",
         loopType: "no",
         isPublished: true,
@@ -398,6 +407,14 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
     });
 
     map.set(key, existing);
+  }
+
+  // Only initial grouping sets category. Changing file roles later must not
+  // override a category the user selected manually.
+  for (const group of map.values()) {
+    group.category = group.files.some((item) =>
+      item.role === "lap3Brstm" || item.role === "lap3Preview"
+    ) ? "コースBGM" : "その他BGM";
   }
 
   return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
@@ -703,6 +720,57 @@ export default function AdminPage() {
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
       .map((item) => item.label);
   }, [tracks, packs]);
+
+  const tagCompanions = useMemo(() => {
+    const pairs = new Map<string, Map<string, number>>();
+    const names = new Map(
+      tagPickerSuggestions.map((tag) => [
+        tagAliasMap.get(tag.toLowerCase()) ?? tag.toLowerCase(),
+        tag,
+      ])
+    );
+
+    for (const entry of [...tracks, ...packs]) {
+      const keys = [...new Set(splitTagList(entry.tags || "")
+        .map((tag) => tagAliasMap.get(tag.toLowerCase()) ?? tag.toLowerCase())
+        .filter((key) => key !== "no tag"))];
+
+      // Each track/pack counts only once for each pair of tags.
+      for (const base of keys) {
+        const related = pairs.get(base) ?? new Map<string, number>();
+        for (const candidate of keys) {
+          if (candidate === base) continue;
+          related.set(candidate, (related.get(candidate) ?? 0) + 1);
+        }
+        pairs.set(base, related);
+      }
+    }
+
+    return { pairs, names };
+  }, [tracks, packs, tagPickerSuggestions, tagAliasMap]);
+
+  const bulkRelatedTagSuggestions = useMemo(() => new Map(
+    bulkGroups.map((group) => {
+      const selected = new Set(
+        splitTagList(group.tags)
+          .map((tag) => tagAliasMap.get(tag.toLowerCase()) ?? tag.toLowerCase())
+          .filter((tag) => tag !== "no tag")
+      );
+      const scores = new Map<string, number>();
+      for (const tag of selected) {
+        for (const [candidate, count] of tagCompanions.pairs.get(tag) ?? []) {
+          if (selected.has(candidate)) continue;
+          scores.set(candidate, (scores.get(candidate) ?? 0) + count);
+        }
+      }
+      const related = [...scores]
+        .sort((a, b) => b[1] - a[1] ||
+          (tagCompanions.names.get(a[0]) ?? a[0]).localeCompare(tagCompanions.names.get(b[0]) ?? b[0]))
+        .slice(0, 6)
+        .map(([tag]) => tagCompanions.names.get(tag) ?? tag);
+      return [group.key, related] as const;
+    })
+  ), [bulkGroups, tagCompanions, tagAliasMap]);
 
   const adminTrackMatches = useMemo(() => {
     const keyword = adminTrackQuery
@@ -1284,7 +1352,7 @@ export default function AdminPage() {
         key: splitKey,
         title: splitTitle,
         titleEn: "",
-        category: source.category,
+        category: "その他BGM",
         tags: normalizeTagsForSave(source.tags),
         loopType: "no",
         isPublished: source.isPublished,
@@ -1665,11 +1733,9 @@ export default function AdminPage() {
       current.map((group) => {
         if (group.key !== key) return group;
 
-        const existing = group.tags
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean);
-
+        const existing = splitTagList(group.tags).filter(
+          (item) => item.toLowerCase() !== "no tag"
+        );
         if (existing.some((item) => item.toLowerCase() === tag.toLowerCase())) {
           return group;
         }
@@ -2577,11 +2643,33 @@ export default function AdminPage() {
                       <AdminTagPicker
                         label="タグ"
                         value={group.tags}
-                        onChange={(nextTags) =>
-                          updateBulkGroup(group.key, { tags: nextTags })
-                        }
+                        onChange={(nextTags) => {
+                          const tags = splitTagList(nextTags);
+                          const selected = tags.length > 1
+                            ? tags.filter((tag) => tag.toLowerCase() !== "no tag")
+                            : tags;
+                          updateBulkGroup(group.key, {
+                            tags: selected.length ? selected.join(", ") : "No tag",
+                          });
+                        }}
                         suggestions={tagPickerSuggestions}
                       />
+
+                      {(bulkRelatedTagSuggestions.get(group.key)?.length ?? 0) > 0 && (
+                        <div className="adminBulkRelatedTags">
+                          <span className="bulkTitleSuggestionHeading">一緒に使われるタグ</span>
+                          {bulkRelatedTagSuggestions.get(group.key)?.map((tag) => (
+                            <button
+                              type="button"
+                              className="secondaryButton adminBulkRelatedTag"
+                              key={tag}
+                              onClick={() => addSuggestedTagToGroup(group.key, tag)}
+                            >
+                              + #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {getMissingBulkPreviews(group).length > 0 && (
                         <div className="previewMissingNotice" role="status">
