@@ -35,23 +35,32 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.3" cy="10" r="2"/><path d="M5.8 16c.4-2.1 4.5-2.1 4.9 0M14 9h5M14 13h5M14 17h3"/></svg>
           </span>
           <h2 id="lounge-title">Kei Lounge Card</h2>
-          <div class="actions">
-            <a class="action" href="/lounge">
-              ラウンジカードを開く <span aria-hidden="true">↗</span>
-            </a>
-            <a class="action action-secondary" href="/lounge/item-counter">
-              Item Counterを開く <span aria-hidden="true">↗</span>
-            </a>
-          </div>
+          <a class="action" href="/lounge">ラウンジカードを開く <span aria-hidden="true">↗</span></a>
+        </section>
+
+        <section class="project-card" aria-labelledby="counter-title">
+          <span class="project-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 8h10M8 12v5M6 14.5h4M14 14.5h4"/></svg></span>
+          <h2 id="counter-title">Item Overlay</h2>
+          <a class="action" href="/lounge/item-counter">Item Overlayを開く <span aria-hidden="true">↗</span></a>
         </section>
 
         <section class="project-card" id="stats-card" aria-labelledby="stats-title">
           <span class="project-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V13M10 20V4M16 20v-9M22 20v-5M2 20h20"/></svg>
           </span>
-          <h2 id="stats-title">MKW Course Stats</h2>
-          <a class="action" id="stats-link" href="/stats" aria-label="MKW Course Statsを開く">
+          <h2 id="stats-title">Track Stats</h2>
+          <a class="action" id="stats-link" href="/stats" aria-label="Track Statsを開く">
             コース別成績を見る <span aria-hidden="true">↗</span>
+          </a>
+        </section>
+
+        <section class="project-card" id="overlay-card" aria-labelledby="overlay-title">
+          <span class="project-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4M6 9h4M6 13h4M14 9h4M14 13h4"/></svg>
+          </span>
+          <h2 id="overlay-title">Table Overlay</h2>
+          <a class="action" href="https://pitwall-mkw-overlay.kei-projects.workers.dev/">
+            テーブルを開く <span aria-hidden="true">↗</span>
           </a>
         </section>
       </div>

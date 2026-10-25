@@ -57,7 +57,7 @@ export default function KeiProjectRail(_props: KeiProjectRailProps) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              MKW Item Counter
+              Item Overlay
             </a>
 
             {courseStatsUrl && (
@@ -67,9 +67,10 @@ export default function KeiProjectRail(_props: KeiProjectRailProps) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                MKW Course Stats
+                Track Stats
               </a>
             )}
+            <a className={styles.projectItem} href="https://pitwall-mkw-overlay.kei-projects.workers.dev/" target="_blank" rel="noopener noreferrer">Table Overlay</a>
           </div>
         )}
       </div>

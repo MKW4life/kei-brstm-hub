@@ -72,7 +72,7 @@ try {
     for (const [text, href] of [
       ["BRSTMを探す", "/music"],
       ["ラウンジカードを開く", "/lounge"],
-      ["Item Counterを開く", "/lounge/item-counter"],
+      ["Item Overlayを開く", "/lounge/item-counter"],
     ]) {
       const link = page.getByRole("link", { name: new RegExp(text) });
       assert.equal(await link.count(), 1);
