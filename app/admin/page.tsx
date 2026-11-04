@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
 import AdminTagPicker from "@/components/AdminTagPicker";
+import AdminStorageUsage from "@/components/AdminStorageUsage";
 import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 
 type Track = {
@@ -2451,6 +2452,7 @@ export default function AdminPage() {
       </header>
 
       <main className="main">
+        <AdminStorageUsage />
         <nav className="adminSectionNav" aria-label="管理画面の項目">
           {[
             { id: "admin-bulk", label: "BRSTM一括追加" },
