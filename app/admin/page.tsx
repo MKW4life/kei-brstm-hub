@@ -8,6 +8,7 @@ import KeiProjectRail from "@/components/KeiProjectRail";
 import AdminTagPicker from "@/components/AdminTagPicker";
 import AdminStorageUsage from "@/components/AdminStorageUsage";
 import { parseUploadFilename } from "@/lib/uploadFilename";
+import { isPreviewExtension, uploadContentType } from "@/lib/audioFiles";
 import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 
 type Track = {
@@ -53,7 +54,7 @@ const bulkRoleDisplayOrder: Record<BulkRole, number> = {
 type BulkGroupFile = {
   id: string;
   name: string;
-  extension: "brstm" | "mp3";
+  extension: "brstm" | "mp3" | "ogg";
   role: BulkRole;
   file: File;
 };
@@ -87,19 +88,19 @@ function getMissingBulkPreviews(group: BulkGroup): string[] {
   const roles = new Set(group.files.map((file) => file.role));
   const missing: string[] = [];
   if (roles.has("normalBrstm") && !roles.has("normalPreview")) {
-    missing.push("通常プレビューMP3");
+    missing.push("通常プレビュー音源");
   }
   if (roles.has("lap3Brstm") && !roles.has("lap3Preview")) {
-    missing.push("Lap 3プレビューMP3");
+    missing.push("Lap 3プレビュー音源");
   }
   return missing;
 }
 
 function getMissingTrackPreviews(track: Track): string[] {
   const missing: string[] = [];
-  if (track.brstm_url && !track.preview_url) missing.push("通常プレビューMP3");
+  if (track.brstm_url && !track.preview_url) missing.push("通常プレビュー音源");
   if (track.brstm_lap3_url && !track.preview_lap3_url) {
-    missing.push("Lap 3プレビューMP3");
+    missing.push("Lap 3プレビュー音源");
   }
   return missing;
 }
@@ -290,7 +291,7 @@ function getNormalFinalPair(stem: string, names: Set<string>) {
   };
 }
 
-/** BRSTM and MP3 with the same stem move, split and change role together. */
+/** BRSTM and previews with the same stem move, split and change role together. */
 function hasSameBulkStem(a: BulkGroupFile, b: BulkGroupFile) {
   return normalizeCompareName(stripExtension(a.name)) ===
     normalizeCompareName(stripExtension(b.name));
@@ -318,7 +319,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         metadata: parseUploadFilename(file.name),
       };
     })
-    .filter((item) => ["brstm", "mp3"].includes(item.extension));
+    .filter((item) => ["brstm", "mp3", "ogg"].includes(item.extension));
 
   const knownNames = new Set(
     usableFiles.map((item) => item.normalizedStem)
@@ -460,7 +461,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
     existing.files.push({
       id: `${key}-${item.index}-${item.file.name}`,
       name: item.file.name,
-      extension: item.extension as "brstm" | "mp3",
+      extension: item.extension as "brstm" | "mp3" | "ogg",
       role,
       file: item.file,
     });
@@ -539,7 +540,7 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
     );
     if (existingIndex !== -1) {
       // A registered match is more useful than a filename-only suggestion,
-      // because its existing MP3 can be auditioned.
+      // because its existing preview can be auditioned.
       if (candidate.source === "registered" &&
         suggestions[existingIndex].source === "filename") {
         suggestions[existingIndex] = candidate;
@@ -1034,15 +1035,15 @@ export default function AdminPage() {
   function handleAdminPreview(track: Track, previewUrl: string, variant: "normal" | "lap3") {
     if (!previewUrl) {
       setMessage(variant === "normal"
-        ? "通常プレビューMP3が登録されていません。"
-        : "Lap 3プレビューMP3が登録されていません。");
+        ? "通常プレビュー音源が登録されていません。"
+        : "Lap 3プレビュー音源が登録されていません。");
       return;
     }
     void playAdminAudio(`${track.id}-${variant}`, previewUrl);
   }
 
-  function handleQueuedMp3Preview(file: BulkGroupFile) {
-    if (file.extension !== "mp3") return;
+  function handleQueuedPreview(file: BulkGroupFile) {
+    if (!isPreviewExtension(file.extension)) return;
     void playAdminAudio(`upload-file-${file.id}`, file.file);
   }
 
@@ -1220,11 +1221,7 @@ export default function AdminPage() {
   async function uploadFile(bucket: string, file: File) {
     const filePath = safeFileName(file.name);
     const key = `${bucket}/${filePath}`;
-    const contentType =
-      file.type ||
-      (file.name.toLowerCase().endsWith(".mp3")
-        ? "audio/mpeg"
-        : "application/octet-stream");
+    const contentType = uploadContentType(file.name, file.type);
 
     const accessToken = await getAdminAccessToken();
 
@@ -1322,7 +1319,7 @@ export default function AdminPage() {
     setShowDuplicateReview(false);
 
     if (groups.length === 0) {
-      setMessage("BRSTMまたはMP3ファイルを選択してください。");
+      setMessage("BRSTM・MP3・OGGファイルを選択してください。");
       return;
     }
 
@@ -1395,7 +1392,7 @@ export default function AdminPage() {
 
           if (group.key === targetGroupKey) {
             // Moving to another song has always assigned Lap 3; apply it
-            // consistently to the BRSTM and MP3 of the same filename.
+            // consistently to the BRSTM and previews of the same filename.
             return {
               ...group,
               files: [
@@ -1841,9 +1838,9 @@ export default function AdminPage() {
       case "lap3Brstm":
         return "Lap 3 BRSTM";
       case "normalPreview":
-        return "通常MP3";
+        return "通常プレビュー";
       case "lap3Preview":
-        return "Lap 3 MP3";
+        return "Lap 3プレビュー";
       default:
         return "アップロードしない";
     }
@@ -1928,8 +1925,8 @@ export default function AdminPage() {
 
     const updatedFields = replacements.map((item) =>
       item.role === "normalBrstm" ? "通常BRSTM" :
-      item.role === "normalPreview" ? "通常MP3" :
-      item.role === "lap3Brstm" ? "Lap 3 BRSTM" : "Lap 3 MP3"
+      item.role === "normalPreview" ? "通常プレビュー" :
+      item.role === "lap3Brstm" ? "Lap 3 BRSTM" : "Lap 3プレビュー"
     ).join("・");
     const confirmed = window.confirm(
       `「${existing.title}」を待機中の「${group.title}」のファイルで置き換えますか？\n\n` +
@@ -2528,14 +2525,14 @@ export default function AdminPage() {
 
           <p className="formMessage">
             日英名の自動入力: <code>日本語曲名 __ English Title.brstm</code>
-            <br />Lap 3: <code>日本語曲名 __ English Title [Lap3].brstm</code>（MP3も同じ名前）
+            <br />Lap 3: <code>日本語曲名 __ English Title [Lap3].brstm</code>（MP3・OGGも同じ名前）
           </p>
           <label className="formLabel">
-            BRSTM / MP3 をまとめて選択
+            BRSTM / MP3 / OGG をまとめて選択
             <input
               className="formInput"
               type="file"
-              accept=".brstm,.mp3"
+              accept=".brstm,.mp3,.ogg"
               multiple
               onChange={(event) => handleBulkFiles(event.target.files)}
             />
@@ -2645,7 +2642,7 @@ export default function AdminPage() {
                                           className="secondaryButton adminBulkPreviewButton"
                                           type="button"
                                           onClick={() => handleDuplicatePreview(suggestion, "normal")}
-                                          title="登録済み曲の通常MP3を試聴"
+                                          title="登録済み曲の通常プレビューを試聴"
                                         >
                                           {adminPlayingKey === `duplicate-${suggestion.trackId}-normal`
                                             ? "■ 停止" : "▶ 通常"}
@@ -2656,14 +2653,14 @@ export default function AdminPage() {
                                           className="secondaryButton adminBulkPreviewButton"
                                           type="button"
                                           onClick={() => handleDuplicatePreview(suggestion, "lap3")}
-                                          title="登録済み曲のLap 3 MP3を試聴"
+                                          title="登録済み曲のLap 3プレビューを試聴"
                                         >
                                           {adminPlayingKey === `duplicate-${suggestion.trackId}-lap3`
                                             ? "■ 停止" : "▶ L3"}
                                         </button>
                                       )}
                                       {!suggestion.previewUrl && !suggestion.previewLap3Url && (
-                                        <small className="bulkDuplicateNoPreview">MP3未登録</small>
+                                        <small className="bulkDuplicateNoPreview">プレビュー未登録</small>
                                       )}
                                     </div>
                                   )}
@@ -2813,19 +2810,19 @@ export default function AdminPage() {
                                   paired.id !== item.id &&
                                   paired.extension !== item.extension &&
                                   hasSameBulkStem(paired, item)
-                                ) && " / BRSTM・MP3連動"}
+                                ) && " / BRSTM・プレビュー音源連動"}
                               </div>
 
                               <div className="adminBulkFileActions">
-                                {item.extension === "mp3" && (
+                                {isPreviewExtension(item.extension) && (
                                   <button
                                     className="secondaryButton adminBulkPreviewButton"
                                     type="button"
-                                    onClick={() => handleQueuedMp3Preview(item)}
-                                    title="アップロード待機中のMP3を試聴"
+                                    onClick={() => handleQueuedPreview(item)}
+                                    title="アップロード待機中のプレビュー音源を試聴"
                                   >
                                     {adminPlayingKey === `upload-file-${item.id}`
-                                      ? "■ 停止" : "▶ MP3試聴"}
+                                      ? "■ 停止" : "▶ 試聴"}
                                   </button>
                                 )}
                                 {group.files.length > 1 && (
@@ -2847,7 +2844,7 @@ export default function AdminPage() {
                                 className="formInput"
                                 value={group.key}
                                 disabled={bulkUploading || group.status === "done"}
-                                title="同じファイル名のBRSTM・MP3もまとめて移動"
+                                title="同じファイル名のBRSTM・プレビュー音源もまとめて移動"
                                 onChange={(event) =>
                                   moveBulkFile(
                                     group.key,
@@ -2873,7 +2870,7 @@ export default function AdminPage() {
                                 className="formInput"
                                 value={item.role}
                                 disabled={bulkUploading || group.status === "done"}
-                                title="同じファイル名のBRSTM・MP3の役割をまとめて変更"
+                                title="同じファイル名のBRSTM・プレビュー音源の役割をまとめて変更"
                                 onChange={(event) =>
                                   updateBulkFileRole(
                                     group.key,
@@ -2889,8 +2886,8 @@ export default function AdminPage() {
                                   </>
                                 ) : (
                                   <>
-                                    <option value="normalPreview">通常MP3</option>
-                                    <option value="lap3Preview">Lap 3 MP3</option>
+                                    <option value="normalPreview">通常プレビュー</option>
+                                    <option value="lap3Preview">Lap 3プレビュー</option>
                                   </>
                                 )}
                                 <option value="ignore">アップロードしない</option>
@@ -2979,7 +2976,7 @@ export default function AdminPage() {
           )}
 
           <p className="formMessage">
-            ※ BRSTM → MP3 の自動変換はまだ未実装です。現在はMP3も一緒に選択した場合に自動割り当てします。
+            プレビューはMP3・OGGに対応しています。同じ名前のBRSTMと一緒に選択すると自動で割り当てます。
           </p>
           </div>
         </details>
@@ -3340,14 +3337,14 @@ export default function AdminPage() {
                       </label>
 
                       <label className="formLabel">
-                        通常用プレビューMP3を差し替え
+                        通常用プレビュー音源を差し替え
                         {!track.preview_url && !editPreviewFile && (
-                          <span className="previewMissingInline" title="通常プレビューMP3未登録">⚠️ 未登録</span>
+                          <span className="previewMissingInline" title="通常プレビュー音源未登録">⚠️ 未登録</span>
                         )}
                         <input
                           className="formInput"
                           type="file"
-                          accept=".mp3"
+                          accept=".mp3,.ogg"
                           onChange={(event) =>
                             setEditPreviewFile(event.target.files?.[0] ?? null)
                           }
@@ -3369,14 +3366,14 @@ export default function AdminPage() {
                       </label>
 
                       <label className="formLabel">
-                        Lap 3用プレビューMP3を差し替え
+                        Lap 3用プレビュー音源を差し替え
                         {track.brstm_lap3_url && !track.preview_lap3_url && !editPreviewLap3File && (
-                          <span className="previewMissingInline" title="Lap 3プレビューMP3未登録">⚠️ 未登録</span>
+                          <span className="previewMissingInline" title="Lap 3プレビュー音源未登録">⚠️ 未登録</span>
                         )}
                         <input
                           className="formInput"
                           type="file"
-                          accept=".mp3"
+                          accept=".mp3,.ogg"
                           onChange={(event) =>
                             setEditPreviewLap3File(
                               event.target.files?.[0] ?? null
@@ -3426,11 +3423,11 @@ export default function AdminPage() {
                       {track.tags && renderTags(track.tags)}
                       <p>
                         通常: {track.brstm_url ? "BRSTMあり" : "BRSTMなし"} / 通常プレビュー:{" "}
-                        {track.preview_url ? "MP3あり" : track.brstm_url ? "⚠️ MP3なし" : "MP3なし"}
+                        {track.preview_url ? "音源あり" : track.brstm_url ? "⚠️ 音源なし" : "音源なし"}
                       </p>
                       <p>
                         Lap 3: {track.brstm_lap3_url ? "BRSTMあり" : "BRSTMなし"} / Lap 3プレビュー:{" "}
-                        {track.preview_lap3_url ? "MP3あり" : track.brstm_lap3_url ? "⚠️ MP3なし" : "MP3なし"}
+                        {track.preview_lap3_url ? "音源あり" : track.brstm_lap3_url ? "⚠️ 音源なし" : "音源なし"}
                       </p>
                       <p>{track.is_published ? "公開中" : "非公開"}</p>
 
@@ -3864,19 +3861,19 @@ export default function AdminPage() {
 
                   {(() => {
                     const group = bulkGroups.find((candidate) => candidate.key === item.groupKey);
-                    const pendingMp3s = group?.files.filter((file) =>
-                      file.extension === "mp3" &&
+                    const pendingPreviews = group?.files.filter((file) =>
+                      isPreviewExtension(file.extension) &&
                       (file.role === "normalPreview" || file.role === "lap3Preview")
                     ) ?? [];
                     return (
                       <div className="adminDuplicateReviewPreviewRow">
-                        <span className="adminDuplicateReviewPreviewLabel">新規MP3</span>
-                        {pendingMp3s.length > 0 ? pendingMp3s.map((file) => (
+                        <span className="adminDuplicateReviewPreviewLabel">新規プレビュー</span>
+                        {pendingPreviews.length > 0 ? pendingPreviews.map((file) => (
                           <button
                             key={file.id}
                             className="secondaryButton adminBulkPreviewButton"
                             type="button"
-                            onClick={() => handleQueuedMp3Preview(file)}
+                            onClick={() => handleQueuedPreview(file)}
                             title={file.name}
                           >
                             {adminPlayingKey === `upload-file-${file.id}`
@@ -3884,7 +3881,7 @@ export default function AdminPage() {
                               : file.role === "lap3Preview" ? "▶ L3" : "▶ 通常"}
                           </button>
                         )) : (
-                          <span className="bulkDuplicateNoPreview">MP3未選択</span>
+                          <span className="bulkDuplicateNoPreview">プレビュー未選択</span>
                         )}
                       </div>
                     );
@@ -3910,13 +3907,13 @@ export default function AdminPage() {
                             })()}
                           </span>
                           <div className="adminDuplicateReviewPreviewRow">
-                            <span className="adminDuplicateReviewPreviewLabel">既存MP3</span>
+                            <span className="adminDuplicateReviewPreviewLabel">既存プレビュー</span>
                             {match.previewUrl && (
                               <button
                                 className="secondaryButton adminBulkPreviewButton"
                                 type="button"
                                 onClick={() => void playAdminAudio(`duplicate-${match.id}-normal`, match.previewUrl)}
-                                title="登録済みの通常MP3を試聴"
+                                title="登録済みの通常プレビューを試聴"
                               >
                                 {adminPlayingKey === `duplicate-${match.id}-normal` ? "■ 停止" : "▶ 通常"}
                               </button>
@@ -3926,13 +3923,13 @@ export default function AdminPage() {
                                 className="secondaryButton adminBulkPreviewButton"
                                 type="button"
                                 onClick={() => void playAdminAudio(`duplicate-${match.id}-lap3`, match.previewLap3Url)}
-                                title="登録済みのLap 3 MP3を試聴"
+                                title="登録済みのLap 3プレビューを試聴"
                               >
                                 {adminPlayingKey === `duplicate-${match.id}-lap3` ? "■ 停止" : "▶ L3"}
                               </button>
                             )}
                             {!match.previewUrl && !match.previewLap3Url && (
-                              <span className="bulkDuplicateNoPreview">MP3未登録</span>
+                              <span className="bulkDuplicateNoPreview">プレビュー未登録</span>
                             )}
                           </div>
                         </div>
