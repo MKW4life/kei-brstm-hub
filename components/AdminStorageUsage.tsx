@@ -20,38 +20,45 @@ function formatBytes(bytes: number) {
     : `${(bytes / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 2 })} MB`;
 }
 
+async function requestUsage(): Promise<Usage> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session) throw new Error("再ログインしてください。");
+  const response = await fetch("/api/r2/usage", {
+    headers: { Authorization: `Bearer ${data.session.access_token}` },
+    cache: "no-store",
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "容量を取得できませんでした。");
+  return result;
+}
+
 export default function AdminStorageUsage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !data.session) throw new Error("再ログインしてください。");
-      const response = await fetch("/api/r2/usage", {
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
-        cache: "no-store",
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "容量を取得できませんでした。");
-      setUsage(result);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "容量を取得できませんでした。");
-    } finally {
-      setLoading(false);
-    }
+  const loadUsage = useCallback(() => {
+    return requestUsage()
+      .then((result) => { setUsage(result); setError(""); })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "容量を取得できませんでした。");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void loadUsage(); }, [loadUsage]);
+
+  function refresh() {
+    setLoading(true);
+    setError("");
+    void loadUsage();
+  }
 
   return (
     <section className={styles.panel} aria-label="ストレージ容量" aria-busy={loading}>
       <div className={styles.heading}>
         <h2>ストレージ容量 <span>Cloudflare R2</span></h2>
-        <button className="primaryButton" type="button" disabled={loading} onClick={() => void refresh()}>
+        <button className="primaryButton" type="button" disabled={loading} onClick={refresh}>
           {loading ? "取得中…" : "更新"}
         </button>
       </div>
