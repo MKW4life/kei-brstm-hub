@@ -433,7 +433,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         titleEn: "",
         category: "その他BGM",
         tags: "No tag",
-        loopType: "no",
+        loopType: "loop",
         isPublished: true,
         files: [],
         status: "ready",
@@ -1429,7 +1429,7 @@ export default function AdminPage() {
         titleEn: "",
         category: "その他BGM",
         tags: normalizeTagsForSave(source.tags),
-        loopType: "no",
+        loopType: "loop",
         isPublished: source.isPublished,
         files: filesToSplit.map((item) => ({
           ...item,
