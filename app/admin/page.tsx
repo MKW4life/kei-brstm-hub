@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
 import AdminTagPicker from "@/components/AdminTagPicker";
 import AdminStorageUsage from "@/components/AdminStorageUsage";
+import { parseUploadFilename } from "@/lib/uploadFilename";
 import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 
 type Track = {
@@ -314,6 +315,7 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
         extension,
         stem,
         normalizedStem: normalizeCompareName(stem),
+        metadata: parseUploadFilename(file.name),
       };
     })
     .filter((item) => ["brstm", "mp3"].includes(item.extension));
@@ -323,6 +325,13 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
   );
 
   const prepared = usableFiles.map((item) => {
+    if (item.metadata) {
+      return {
+        ...item,
+        isLap3: item.metadata.isLap3,
+        baseName: `${item.metadata.title} __ ${item.metadata.titleEn}`,
+      };
+    }
     // Treat _n and _f as a single track only if both filename variants
     // exist, including matching numeric suffixes such as " (5)".
     const normalFinalPair = getNormalFinalPair(item.stem, knownNames);
@@ -429,8 +438,8 @@ function buildBulkGroups(files: File[]): BulkGroup[] {
       map.get(key) ||
       ({
         key,
-        title: item.baseName,
-        titleEn: "",
+        title: item.metadata?.title ?? item.baseName,
+        titleEn: item.metadata?.titleEn ?? "",
         category: "その他BGM",
         tags: "No tag",
         loopType: "loop",
@@ -480,6 +489,8 @@ function removeSoundtrackSuffix(value: string) {
 
 /** Only accept bilingual segments when the script boundary is unambiguous. */
 function extractBilingualFilenameTitle(value: string) {
+  const explicit = parseUploadFilename(value);
+  if (explicit) return { title: explicit.title, titleEn: explicit.titleEn };
   const parts = value.split(/\s+(?:\/|\||｜|[-–—])\s+|\s*／\s*/).map((part) => part.trim());
 
   let pair: string[] | null = parts.length === 2 ? parts : null;
@@ -511,6 +522,8 @@ function buildBulkTitleSuggestions(group: BulkGroup, tracks: Track[]): BulkTitle
   ];
   const names = Array.from(new Set(
     sourceFiles.flatMap((item) => {
+      const explicit = parseUploadFilename(item.name);
+      if (explicit) return [explicit.title, explicit.titleEn];
       const stem = cleanBaseName(removeExplicitLap3Marker(stripExtension(item.name)).baseName);
       return [stem, removeSoundtrackSuffix(stem)];
     }).filter(Boolean)
@@ -1419,14 +1432,15 @@ export default function AdminPage() {
 
       const splitIds = new Set(filesToSplit.map((item) => item.id));
       const splitTitle = cleanBaseName(stripExtension(selected.name));
+      const splitMetadata = parseUploadFilename(selected.name);
       const splitKey = `${normalizeCompareName(splitTitle)}-split-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 6)}`;
 
       const newGroup: BulkGroup = {
         key: splitKey,
-        title: splitTitle,
-        titleEn: "",
+        title: splitMetadata?.title ?? splitTitle,
+        titleEn: splitMetadata?.titleEn ?? "",
         category: "その他BGM",
         tags: normalizeTagsForSave(source.tags),
         loopType: "loop",
@@ -2512,6 +2526,10 @@ export default function AdminPage() {
             別の所属曲へ移動したファイルは、自動的にその曲のLap 3として扱います。
           </p>
 
+          <p className="formMessage">
+            日英名の自動入力: <code>日本語曲名 __ English Title.brstm</code>
+            <br />Lap 3: <code>日本語曲名 __ English Title [Lap3].brstm</code>（MP3も同じ名前）
+          </p>
           <label className="formLabel">
             BRSTM / MP3 をまとめて選択
             <input
