@@ -625,6 +625,7 @@ export default function AdminPage() {
   const [packs, setPacks] = useState<MusicPack[]>([]);
   const [message, setMessage] = useState("");
   const [bulkGroups, setBulkGroups] = useState<BulkGroup[]>([]);
+  const [bulkCommonTags, setBulkCommonTags] = useState("");
   const [bulkUploading, setBulkUploading] = useState(false);
   const [editingTrackId, setEditingTrackId] = useState<number | null>(null);
 
@@ -1326,6 +1327,16 @@ export default function AdminPage() {
     setMessage(
       `${groups.length}曲を自動判別しました。必要なら「所属曲」と「役割」を手動で修正してください。`
     );
+  }
+
+  function applyCommonBulkTags() {
+    if (bulkUploading || !splitTagList(bulkCommonTags).length) return;
+    const count = bulkGroups.filter((group) => group.status !== "done").length;
+    if (!count) return;
+    setBulkGroups((current) => current.map((group) => group.status === "done"
+      ? group
+      : { ...group, tags: normalizeTagsForSave(`${group.tags}, ${bulkCommonTags}`) }));
+    setMessage(`${count}曲に共通タグを追加しました。このまま「まとめて登録」できます。`);
   }
 
   function updateBulkGroup(
@@ -2542,6 +2553,21 @@ export default function AdminPage() {
 
           {bulkGroups.length > 0 && (
             <>
+              <fieldset className="bulkCommonTags" disabled={bulkUploading}>
+                <AdminTagPicker
+                  label="全曲に付けるタグ"
+                  value={bulkCommonTags}
+                  onChange={setBulkCommonTags}
+                  suggestions={tagPickerSuggestions}
+                />
+                <div className="adminActions" style={{ marginTop: "12px" }}>
+                  <button className="primaryButton" type="button"
+                    onClick={applyCommonBulkTags}
+                    disabled={!splitTagList(bulkCommonTags).length || !bulkGroups.some((group) => group.status !== "done")}>
+                    未登録の全{bulkGroups.filter((group) => group.status !== "done").length}曲に追加
+                  </button>
+                </div>
+              </fieldset>
               <div
                 className="adminActions"
                 style={{
