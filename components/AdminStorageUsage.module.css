@@ -13,4 +13,10 @@
 .meter::-moz-progress-bar { background: #f4f4f5; }
 .note { margin: 12px 0 0; line-height: 1.7; }
 .warning { color: #fbbf24; font-size: 13px; }
+.audit { margin-top: 18px; padding-top: 18px; border-top: 1px solid #27272a; }
+.auditDetails { margin-top: 14px; font-size: 12px; }
+.auditDetails summary { cursor: pointer; }
+.auditDetails ul { padding-left: 18px; }
+.auditDetails li { overflow-wrap: anywhere; margin: 8px 0; }
+.auditDetails pre { overflow: auto; max-height: 360px; padding: 12px; background: #18181b; }
 @media (max-width: 600px) { .panel { padding: 18px; } .heading h2 span { display: block; margin: 4px 0 0; } .figures { gap: 16px 24px; } }
