@@ -604,6 +604,10 @@ export default function AdminPage() {
 
   const [checking, setChecking] = useState(true);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [wavPendingIds, setWavPendingIds] = useState<number[]>([]);
+  const [wavReviewReady, setWavReviewReady] = useState(false);
+  const [wavReviewError, setWavReviewError] = useState("");
+  const [wavPendingOnly, setWavPendingOnly] = useState(false);
   const [packs, setPacks] = useState<MusicPack[]>([]);
   const [message, setMessage] = useState("");
   const [bulkGroups, setBulkGroups] = useState<BulkGroup[]>([]);
@@ -829,6 +833,7 @@ export default function AdminPage() {
       .replace(/^#/, "");
 
     return tracks
+      .filter((track) => !wavPendingOnly || wavPendingIds.includes(track.id))
       .filter((track) => {
         if (!keyword) return true;
 
@@ -846,7 +851,7 @@ export default function AdminPage() {
       .filter((track) =>
         matchesTagSearch(track.tags, adminTrackTagQuery, adminTrackTagMode)
       );
-  }, [tracks, adminTrackQuery, adminTrackTagQuery, adminTrackTagMode, tagAliasMap]);
+  }, [tracks, adminTrackQuery, adminTrackTagQuery, adminTrackTagMode, tagAliasMap, wavPendingOnly, wavPendingIds]);
 
   const missingPreviewTracks = useMemo(
     () => tracks.filter((track) => getMissingTrackPreviews(track).length > 0),
@@ -865,7 +870,7 @@ export default function AdminPage() {
   }, [missingPreviewTracks, missingPreviewQuery]);
 
   const hasAdminTrackFilter =
-    Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim());
+    Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim()) || wavPendingOnly;
 
   const visibleAdminTracks = hasAdminTrackFilter
     ? adminTrackMatches.slice(0, 50)
@@ -1072,6 +1077,7 @@ export default function AdminPage() {
       .map((track) => track.id);
 
     setTracks(loadedTracks);
+    await loadWavReviewStatus();
 
     if (blankIds.length > 0) {
       const { error: tagError } = await supabase
@@ -1082,6 +1088,23 @@ export default function AdminPage() {
       if (tagError) {
         console.warn("No tagの自動付与に失敗しました。", tagError);
       }
+    }
+  }
+
+  async function loadWavReviewStatus() {
+    try {
+      const token = await getAdminAccessToken();
+      const response = await fetch("/api/admin/brstm-wav-review", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok || !Array.isArray(result.pendingIds)) throw new Error(result.error || "識別を取得できませんでした。");
+      setWavPendingIds(result.pendingIds);
+      setWavReviewError("");
+      setWavReviewReady(true);
+    } catch (error) {
+      setWavReviewReady(false);
+      setWavReviewError(error instanceof Error ? error.message : "識別を取得できませんでした。");
     }
   }
 
@@ -3151,13 +3174,14 @@ export default function AdminPage() {
                 placeholder="曲名・英語名・カテゴリ・Loopなどで検索"
               />
 
-              {(adminTrackQuery || adminTrackTagQuery) && (
+              {(adminTrackQuery || adminTrackTagQuery || wavPendingOnly) && (
                 <button
                   className="secondaryButton"
                   type="button"
                   onClick={() => {
                     setAdminTrackQuery("");
                     setAdminTrackTagQuery("");
+                    setWavPendingOnly(false);
                   }}
                 >
                   クリア
@@ -3194,6 +3218,12 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <label className="formLabel checkboxLabel" style={{ marginBottom: "10px" }}>
+            <input type="checkbox" checked={wavPendingOnly} disabled={!wavReviewReady}
+              onChange={(event) => setWavPendingOnly(event.target.checked)} />
+            WAV未変換のみ{wavReviewReady ? `（${wavPendingIds.length}曲）` : "（識別を取得中）"}
+          </label>
+          {wavReviewError && <p className="formMessage" role="alert">{wavReviewError}</p>}
           <p className="formMessage" style={{ marginBottom: "14px" }}>
             {hasAdminTrackFilter
               ? `${adminTrackMatches.length}件ヒット${
@@ -3357,6 +3387,9 @@ export default function AdminPage() {
                     <div>
                       <h3>
                         {track.title}
+                        {wavReviewReady && wavPendingIds.includes(track.id) && (
+                          <span className="wavPendingBadge" title="通常またはLap 3のBRSTMを置き換えると、この曲の識別を解除します。">WAV未変換</span>
+                        )}
                         {getMissingTrackPreviews(track).length > 0 && (
                           <span
                             className="previewMissingInline"

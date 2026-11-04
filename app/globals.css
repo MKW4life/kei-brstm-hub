@@ -433,6 +433,20 @@ a {
   background: #0c0c0f;
 }
 
+.wavPendingBadge {
+  display: inline-block;
+  padding: 4px 9px;
+  margin: 0 0 0 8px;
+  border: 1px solid #a1a1aa;
+  border-radius: 6px;
+  color: #e4e4e7;
+  background: #27272a;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .adminPanel.wide {
   max-width: 100%;
   margin: 44px 0;

@@ -28,7 +28,9 @@ export function auditStorage(objects: StoredObject[], references: FileReference[
       invalidReferences.push(reference);
     }
   }
-  const inventory = objects.map((object) => ({ ...object, references: referencesByKey.get(object.key) ?? [] }));
+  // Internal encrypted administration state is never a removable audio file.
+  const inventory = objects.filter((object) => !object.key.startsWith("__admin__/"))
+    .map((object) => ({ ...object, references: referencesByKey.get(object.key) ?? [] }));
   const bySize = (a: { size: number }, b: { size: number }) => b.size - a.size;
   const unused = inventory.filter((object) => object.references.length === 0).sort(bySize);
   const fingerprints = new Map<string, typeof inventory>();

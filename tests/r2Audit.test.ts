@@ -6,6 +6,13 @@ const hash = "a".repeat(32);
 const object = (key: string, size = 100, etag = hash) => ({ key, size, etag, modifiedAt: null });
 const base = "https://files.example.test/music";
 
+test("private administration state is not an unused or duplicate audio candidate", () => {
+  const report = auditStorage([object("__admin__/brstm-wav-review-v1.enc")], [], base);
+  assert.equal(report.unusedCount, 0);
+  assert.equal(report.duplicateGroups, 0);
+  assert.equal(report.usedBytes, 100);
+});
+
 test("private/normal/lap3 references protect files, URL-encoded names resolve, external same-key URLs do not", () => {
   const report = auditStorage([object("brstm-files/a b"), object("previews/lap3"), object("previews/orphan")], [
     { url: `${base}/brstm-files/a%20b?download=1`, label: "private normal" },
