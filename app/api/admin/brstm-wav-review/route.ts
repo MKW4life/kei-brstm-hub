@@ -21,11 +21,11 @@ export async function POST(request: Request) {
       global: { headers: { Authorization: request.headers.get("authorization")! } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const tracks: TrackFiles[] = [];
+    const tracks: (TrackFiles & { title: string; title_en: string | null })[] = [];
     let total = 0;
     do {
       const { data, count, error } = await db.from("tracks")
-        .select("id, brstm_url, brstm_lap3_url", { count: "exact" })
+        .select("id, title, title_en, brstm_url, brstm_lap3_url", { count: "exact" })
         .order("id", { ascending: true }).range(tracks.length, tracks.length + 499);
       if (error || count === null || !data || (data.length === 0 && tracks.length < count)) {
         throw new Error("Could not read the complete track list.");
@@ -62,8 +62,11 @@ export async function POST(request: Request) {
         baseline = await readBaseline();
       }
     }
+    const pendingIds = pendingWavReviewIds(baseline, tracks);
+    const pendingSet = new Set(pendingIds);
     return Response.json({
-      pendingIds: pendingWavReviewIds(baseline, tracks),
+      pendingIds,
+      pendingTracks: tracks.filter((track) => pendingSet.has(track.id)),
       capturedAt: baseline.capturedAt,
       initialCount: Object.keys(baseline.tracks).length,
     }, { headers });

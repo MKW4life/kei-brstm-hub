@@ -622,6 +622,7 @@ export default function AdminPage() {
   const [wavReviewReady, setWavReviewReady] = useState(false);
   const [wavReviewError, setWavReviewError] = useState("");
   const [wavPendingOnly, setWavPendingOnly] = useState(false);
+  const [wavManifestSaving, setWavManifestSaving] = useState(false);
   const [packs, setPacks] = useState<MusicPack[]>([]);
   const [message, setMessage] = useState("");
   const [bulkGroups, setBulkGroups] = useState<BulkGroup[]>([]);
@@ -1117,10 +1118,32 @@ export default function AdminPage() {
       setWavPendingIds(result.pendingIds);
       setWavReviewError("");
       setWavReviewReady(true);
+      return result;
     } catch (error) {
       setWavReviewReady(false);
       setWavReviewError(error instanceof Error ? error.message : "識別を取得できませんでした。");
+      return null;
     }
+  }
+
+  async function saveWavManifest() {
+    setWavManifestSaving(true);
+    try {
+      const result = await loadWavReviewStatus();
+      if (!Array.isArray(result?.pendingTracks)) return;
+      const manifest = {
+        version: 1, source: "Kei BRSTM Hub", selection: "WAV未変換",
+        exportedAt: new Date().toISOString(), capturedAt: result.capturedAt,
+        tracks: result.pendingTracks,
+      };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `brstm-wav-unconverted-${manifest.exportedAt.slice(0, 10)}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMessage(`WAV未変換の${manifest.tracks.length}曲の対象リストを保存しました。`);
+    } finally { setWavManifestSaving(false); }
   }
 
   async function loadPacks() {
@@ -3265,6 +3288,11 @@ export default function AdminPage() {
             WAV未変換のみ{wavReviewReady ? `（${wavPendingIds.length}曲）` : "（識別を取得中）"}
           </label>
           {wavReviewError && <p className="formMessage" role="alert">{wavReviewError}</p>}
+          <button type="button" className="primaryButton" style={{ marginBottom: "12px" }}
+            disabled={!wavReviewReady || wavManifestSaving || !wavPendingIds.length}
+            onClick={() => void saveWavManifest()}>
+            {wavManifestSaving ? "対象リストを取得中…" : "WAV未変換の対象リストを保存"}
+          </button>
           <p className="formMessage" style={{ marginBottom: "14px" }}>
             {hasAdminTrackFilter
               ? `${adminTrackMatches.length}件ヒット${
