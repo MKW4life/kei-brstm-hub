@@ -666,6 +666,7 @@ export default function AdminPage() {
   const [showDuplicateReview, setShowDuplicateReview] = useState(false);
   const [duplicateSkippedGroupKeys, setDuplicateSkippedGroupKeys] = useState<string[]>([]);
   const [adminTrackQuery, setAdminTrackQuery] = useState("");
+  const [showAllAdminTracks, setShowAllAdminTracks] = useState(false);
   const [adminTrackTagQuery, setAdminTrackTagQuery] = useState("");
   const [adminTrackTagMode, setAdminTrackTagMode] = useState<"all" | "any">("all");
   const [bulkTagName, setBulkTagName] = useState("");
@@ -892,9 +893,10 @@ export default function AdminPage() {
   const hasAdminTrackFilter =
     Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim()) || wavPendingOnly;
 
-  const visibleAdminTracks = hasAdminTrackFilter
-    ? adminTrackMatches.slice(0, 50)
-    : tracks.slice(0, 8);
+  const adminTrackDefaultLimit = hasAdminTrackFilter ? 50 : 8;
+  const visibleAdminTracks = showAllAdminTracks
+    ? adminTrackMatches
+    : adminTrackMatches.slice(0, adminTrackDefaultLimit);
 
   const bulkTagTrackMatches = useMemo(() => {
     const keyword = bulkTagTrackQuery
@@ -3324,11 +3326,18 @@ export default function AdminPage() {
           </button>
           <p className="formMessage" style={{ marginBottom: "14px" }}>
             {hasAdminTrackFilter
-              ? `${adminTrackMatches.length}件ヒット${
-                  adminTrackMatches.length > 50 ? "（先頭50件を表示）" : ""
-                }`
-              : `全${tracks.length}曲のうち、最近登録した8曲だけ表示しています。過去の曲は検索してください。`}
+              ? `${adminTrackMatches.length}件ヒット（${visibleAdminTracks.length}曲表示）`
+              : `全${tracks.length}曲中${visibleAdminTracks.length}曲表示`}
           </p>
+          {adminTrackMatches.length > adminTrackDefaultLimit && (
+            <button type="button" className="secondaryButton" style={{ marginBottom: "14px" }}
+              aria-pressed={showAllAdminTracks}
+              onClick={() => setShowAllAdminTracks(current => !current)}>
+              {showAllAdminTracks
+                ? `${adminTrackDefaultLimit}件表示に戻す`
+                : `すべて表示（${adminTrackMatches.length}曲）`}
+            </button>
+          )}
 
           <div className="adminTrackList">
             <AdminBulkDelete tracks={tracks} matches={adminTrackMatches} visibleIds={visibleAdminTracks.map(track=>track.id)} selectedIds={selectedDeleteIds} onSelection={setSelectedDeleteIds} onDeleted={loadTracks} onBusyChange={setBulkDeleteBusy}/>
