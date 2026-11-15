@@ -27,3 +27,16 @@ test('incomplete reference checks and malformed URLs fail closed, partial result
  const bad=await cleanupUnusedFiles([file],{publicBaseUrl:'https://files.test',head:async()=>file,references:async()=>[{url:'bad-url',label:'broken'}],remove:async()=>{throw Error('must not delete');}},now);
  assert.equal(bad[0].status,'error');
 });
+
+test('list timestamps with milliseconds match HEAD HTTP timestamps at second precision',async()=>{
+ const snapshot={...file,modifiedAt:'2026-11-15T12:00:00.343Z'};
+ const removed:string[]=[];
+ const deps={publicBaseUrl:'https://files.test',head:async()=>({...snapshot,modifiedAt:'2026-11-15T12:00:00.000Z'}),references:async()=>[],remove:async(key:string)=>{removed.push(key);}};
+ const results=await cleanupUnusedFiles([snapshot],deps,now);
+ assert.equal(results[0].status,'deleted');assert.deepEqual(removed,[snapshot.key]);
+ removed.length=0;
+ const changed=await cleanupUnusedFiles([snapshot],{...deps,head:async()=>({...snapshot,modifiedAt:'2026-11-15T12:00:01.000Z'})},now);
+ assert.equal(changed[0].status,'blocked');assert.equal(removed.length,0);
+ const changedContent=await cleanupUnusedFiles([snapshot],{...deps,head:async()=>({...snapshot,modifiedAt:'2026-11-15T12:00:00.000Z',etag:'different'})},now);
+ assert.equal(changedContent[0].status,'blocked');assert.equal(removed.length,0);
+});

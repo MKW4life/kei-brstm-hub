@@ -31,7 +31,10 @@ export async function cleanupUnusedFiles(files:StoredObject[],deps:Dependencies,
    const current=await deps.head(file.key);
    if(!current){results.push({key:file.key,status:'missing'});continue;}
    const blocked=cleanupBlockedReason(current,now);
-   if(blocked||current.key!==file.key||current.size!==file.size||current.etag!==file.etag||current.modifiedAt!==file.modifiedAt){results.push({key:file.key,status:'blocked',message:blocked||'検査後にファイルが変更されています。'});continue;}
+   // ListObjectsV2 preserves milliseconds; HEAD's Last-Modified HTTP date does not.
+   // Compare their shared precision while still requiring identical ETag and size.
+   const sameModifiedSecond=Math.floor(Date.parse(current.modifiedAt??'')/1000)===Math.floor(Date.parse(file.modifiedAt??'')/1000);
+   if(blocked||current.key!==file.key||current.size!==file.size||current.etag!==file.etag||!sameModifiedSecond){results.push({key:file.key,status:'blocked',message:blocked||'検査後にファイルが変更されています。'});continue;}
    // Re-read the complete public/private track and pack references per object.
    const report=auditStorage([current],await deps.references(),deps.publicBaseUrl);
    if(report.invalidReferences.length)throw Error('登録URLを完全に確認できません。');
