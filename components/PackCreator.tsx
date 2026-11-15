@@ -160,11 +160,11 @@ const battleGroups: SlotGroup[] = [
     en: "Wii Stages",
     icon: "/pack-icons/65px-MKW_Wii_Stages_Icon.webp",
     slots: [
-      { id: "block", ja: "ブロックひろば", en: "Block Plaza", outputNormal: "n_block_n", supportsLap3: false },
-      { id: "venice", ja: "アクアリゾート", en: "Delfino Pier", outputNormal: "n_venice_n", supportsLap3: false },
-      { id: "skate", ja: "ファンキースタジアム", en: "Funky Stadium", outputNormal: "n_skate_n", supportsLap3: false },
-      { id: "casino", ja: "ワンワンルーレット", en: "Chain Chomp Wheel", outputNormal: "n_casino_n", supportsLap3: false },
-      { id: "ryuusa", ja: "ドッスンさばく", en: "Thwomp Desert", outputNormal: "n_ryuusa_n", supportsLap3: false },
+      { id: "block", ja: "ブロックひろば", en: "Block Plaza", outputNormal: "n_block_n", supportsLap3: true },
+      { id: "venice", ja: "アクアリゾート", en: "Delfino Pier", outputNormal: "n_venice_n", supportsLap3: true },
+      { id: "skate", ja: "ファンキースタジアム", en: "Funky Stadium", outputNormal: "n_skate_n", supportsLap3: true },
+      { id: "casino", ja: "ワンワンルーレット", en: "Chain Chomp Wheel", outputNormal: "n_casino_n", supportsLap3: true },
+      { id: "ryuusa", ja: "ドッスンさばく", en: "Thwomp Desert", outputNormal: "n_ryuusa_n", supportsLap3: true },
     ],
   },
   {
@@ -173,11 +173,11 @@ const battleGroups: SlotGroup[] = [
     en: "Retro Stages",
     icon: "/pack-icons/65px-MKW_Retro_Stages_Icon.webp",
     slots: [
-      { id: "sfc-battle", ja: "SFC バトルコース4", en: "SNES Battle Course 4", outputNormal: "r_sfc_battle_n", supportsLap3: false },
-      { id: "gba-battle", ja: "GBA バトルコース3", en: "GBA Battle Course 3", outputNormal: "r_agb_battle_n", supportsLap3: false },
-      { id: "n64-battle", ja: "64 まてんろう", en: "N64 Skyscraper", outputNormal: "r_64_battle_n", supportsLap3: false },
-      { id: "gcn-battle", ja: "GC クッキーランド", en: "GCN Cookie Land", outputNormal: "r_GC_Battle32_n", supportsLap3: false },
-      { id: "ds-battle", ja: "DS ゆうやみハウス", en: "DS Twilight House", outputNormal: "r_ds_battle_n", supportsLap3: false },
+      { id: "sfc-battle", ja: "SFC バトルコース4", en: "SNES Battle Course 4", outputNormal: "r_sfc_battle_n", supportsLap3: true },
+      { id: "gba-battle", ja: "GBA バトルコース3", en: "GBA Battle Course 3", outputNormal: "r_agb_battle_n", supportsLap3: true },
+      { id: "n64-battle", ja: "64 まてんろう", en: "N64 Skyscraper", outputNormal: "r_64_battle_n", supportsLap3: true },
+      { id: "gcn-battle", ja: "GC クッキーランド", en: "GCN Cookie Land", outputNormal: "r_GC_Battle32_n", supportsLap3: true },
+      { id: "ds-battle", ja: "DS ゆうやみハウス", en: "DS Twilight House", outputNormal: "r_ds_battle_n", supportsLap3: true },
     ],
   },
 ];
@@ -974,8 +974,8 @@ export default function PackCreator({
               </h2>
               <p>
                 {language === "ja"
-                  ? "空欄のスロットはZIPに含まれません。レースコースは通常/Lap 3をゲーム用ファイル名へ自動で改名します。"
-                  : "Empty slots are excluded. Race slots automatically rename both normal and Lap 3 BRSTMs."}
+                  ? "空欄はZIPに含まれません。レース・バトルとも通常版とLap3／高速版を出力します。"
+                  : "Empty slots are excluded. Race and battle slots export both normal and final-lap / fast BRSTMs."}
               </p>
             </div>
 
@@ -1027,7 +1027,7 @@ export default function PackCreator({
               <ul>{packIssues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>
             </div>
           )}
-          {progress && <div className={styles.progress}>{progress}</div>
+          {progress && <div className={styles.progress}>{progress}</div>}
           {errorMessage && (
             <pre className={styles.error}>{errorMessage}</pre>
           )}
