@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { packFiles,lap3OutputName,validateBrstm } from "@/lib/packFiles";
 import { createStoredZip, type ZipEntry } from "@/lib/simpleZip";
 import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
@@ -287,6 +287,74 @@ export default function PackCreator({
   const [building, setBuilding] = useState(false);
   const [progress, setProgress] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [draftStatus, setDraftStatus] = useState("");
+  const [draftReady, setDraftReady] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
+  const draftKey = "kei-brstm-pack-draft-v1";
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const draft = JSON.parse(raw) as {version: number; assignments: Record<string,number>; lap3Overrides: Record<string,Lap3Override>};
+        if (draft.version === 1 && draft.assignments && draft.lap3Overrides) {
+          setAssignments(draft.assignments);
+          setLap3Overrides(draft.lap3Overrides);
+        }
+      }
+    } catch {
+      setDraftStatus("保存済みの編集データを復元できませんでした");
+    }
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({version: 1, assignments, lap3Overrides}));
+    } catch {
+      setDraftStatus("自動保存に失敗しました");
+    }
+  }, [assignments, lap3Overrides, draftReady]);
+
+  function exportDraft() {
+    const data = JSON.stringify({version: 1, assignments, lap3Overrides}, null, 2);
+    const url = URL.createObjectURL(new Blob([data], {type:"application/json"}));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "Kei_BRSTM_Pack_Draft.json";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function importDraft(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 1048576) throw new Error("Too large");
+      const draft = JSON.parse(await file.text()) as {version?:number;assignments?:Record<string,number>;lap3Overrides?:Record<string,Lap3Override>};
+      if (draft.version !== 1 || !draft.assignments || !draft.lap3Overrides ||
+          Array.isArray(draft.assignments) || Array.isArray(draft.lap3Overrides)) throw new Error("Invalid draft");
+      const validKeys = new Set(allGroups.flatMap(group => group.slots.map(assignmentKey)));
+      const nextAssignments: Record<string, number> = {};
+      for (const [key, id] of Object.entries(draft.assignments)) {
+        if (validKeys.has(key) && Number.isSafeInteger(id) && trackMap.has(id)) nextAssignments[key] = id;
+      }
+      const nextOverrides: Record<string, Lap3Override> = {};
+      for (const [key, override] of Object.entries(draft.lap3Overrides)) {
+        if (validKeys.has(key) && override && Number.isSafeInteger(override.trackId) &&
+            trackMap.has(override.trackId) && ["normal", "lap3"].includes(override.version)) nextOverrides[key] = override;
+      }
+      setAssignments(nextAssignments);
+      setLap3Overrides(nextOverrides);
+      setDraftStatus(language === "ja" ? "編集データを読み込みました" : "Draft imported");
+    } catch {
+      setDraftStatus(language === "ja" ? "編集データを読み込めませんでした" : "Invalid draft file");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
 
   const trackMap = useMemo(
     () => new Map(tracks.map((track) => [track.id, track])),
@@ -420,6 +488,27 @@ export default function PackCreator({
     (key) => assignments[key] != null
   );
 
+  const packIssues = useMemo(() => {
+    const issues: string[] = [];
+    const seen = new Set<string>();
+    for (const group of allGroups) for (const slot of group.slots) {
+      const key = assignmentKey(slot);
+      if (seen.has(key) || assignments[key] == null) continue;
+      seen.add(key);
+      const track = trackMap.get(assignments[key]);
+      const name = language === "ja" ? slot.ja : slot.en;
+      if (!track) { issues.push(name + ": track missing"); continue; }
+      if (!track.brstm_url?.trim()) issues.push(name + ": Normal BRSTM missing");
+      if (slot.supportsLap3) {
+        const override = lap3Overrides[key];
+        const source = override ? trackMap.get(override.trackId) : track;
+        const url = override?.version === "normal" ? source?.brstm_url : source?.brstm_lap3_url;
+        if (!url?.trim()) issues.push(name + ": Lap 3 BRSTM missing");
+      }
+    }
+    return issues;
+  }, [assignments, lap3Overrides, language, trackMap]);
+
   function assignTrack(slot: Slot, trackId: number) {
     setAssignments((current) => ({
       ...current,
@@ -456,6 +545,10 @@ export default function PackCreator({
 
   async function buildZip() {
     setErrorMessage("");
+    if (packIssues.length > 0) {
+      setErrorMessage(packIssues.join("\n"));
+      return;
+    }
 
     const uniqueSlots = new Map<string, Slot>();
 
@@ -891,6 +984,13 @@ export default function PackCreator({
                 {assignedKeys.length}{" "}
                 {language === "ja" ? "スロット設定" : "slots filled"}
               </span>
+              <input ref={importInput} type="file" accept=".json,application/json" hidden onChange={importDraft} />
+              <button className={styles.resetButton} type="button" onClick={exportDraft} disabled={building}>
+                {language === "ja" ? "編集データ保存" : "Export draft"}
+              </button>
+              <button className={styles.resetButton} type="button" onClick={() => importInput.current?.click()} disabled={building}>
+                {language === "ja" ? "編集データ読込" : "Import draft"}
+              </button>
               <button
                 className={styles.resetButton}
                 type="button"
@@ -920,7 +1020,14 @@ export default function PackCreator({
             </div>
           </div>
 
-          {progress && <div className={styles.progress}>{progress}</div>}
+          {draftStatus && <p role="status">{draftStatus}</p>}
+          {packIssues.length > 0 && (
+            <div role="alert" className={styles.error}>
+              <strong>{language === "ja" ? "不足・問題" : "Pack issues"} ({packIssues.length})</strong>
+              <ul>{packIssues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>
+            </div>
+          )}
+          {progress && <div className={styles.progress}>{progress}</div>
           {errorMessage && (
             <pre className={styles.error}>{errorMessage}</pre>
           )}
