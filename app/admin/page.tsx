@@ -10,6 +10,7 @@ import AdminBulkDelete from "@/components/AdminBulkDelete";
 import AdminStorageUsage from "@/components/AdminStorageUsage";
 import { parseUploadFilename } from "@/lib/uploadFilename";
 import { isPreviewExtension, uploadContentType } from "@/lib/audioFiles";
+import { validateBrstm } from "@/lib/packFiles";
 import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 
 type Track = {
@@ -1246,6 +1247,31 @@ export default function AdminPage() {
   }
 
   async function uploadFile(bucket: string, file: File) {
+    // Validate locally before issuing an upload URL or replacing a stored file.
+    // All upload flows (single, bulk and replacement) share this function.
+    if (file.size === 0) throw new Error(file.name + ": 空のファイルです");
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (bucket === "brstm-files") {
+      if (extension !== "brstm") throw new Error(file.name + ": BRSTMファイルを選択してください");
+      try {
+        validateBrstm(new Uint8Array(await file.arrayBuffer()));
+      } catch {
+        throw new Error(file.name + ": BRSTMのヘッダーまたは内部構造が不正です");
+      }
+    } else if (bucket === "previews") {
+      if (extension !== "mp3" && extension !== "ogg") {
+        throw new Error(file.name + ": MP3またはOGGを選択してください");
+      }
+      const header = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+      const ogg = extension === "ogg" && String.fromCharCode(...header.slice(0, 4)) === "OggS";
+      const mp3Id3 = extension === "mp3" && String.fromCharCode(...header.slice(0, 3)) === "ID3";
+      const mp3Frame = extension === "mp3" && header.some((byte, i) =>
+        i + 1 < header.length && byte === 0xff && (header[i + 1] & 0xe0) === 0xe0
+      );
+      if (!ogg && !mp3Id3 && !mp3Frame) {
+        throw new Error(file.name + ": 音源ファイルの形式を確認してください");
+      }
+    }
     const filePath = safeFileName(file.name);
     const key = `${bucket}/${filePath}`;
     const contentType = uploadContentType(file.name, file.type);
