@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type DragEvent } from "react";
+import { packFiles,lap3OutputName,validateBrstm } from "@/lib/packFiles";
 import { createStoredZip, type ZipEntry } from "@/lib/simpleZip";
 import TagSearchInput, { type TagSuggestion } from "@/components/TagSearchInput";
 import styles from "./PackCreator.module.css";
@@ -204,18 +205,6 @@ function assignmentKey(slot: Slot) {
   return slot.assignmentKey || slot.id;
 }
 
-function lap3OutputName(normal: string) {
-  if (normal.endsWith("_n")) {
-    return `${normal.slice(0, -2)}_f`;
-  }
-
-  if (normal.endsWith("_N")) {
-    return `${normal.slice(0, -2)}_F`;
-  }
-
-  return "";
-}
-
 function displayTrackTitle(track: PackTrack, language: "ja" | "en") {
   return language === "en" ? track.title_en || track.title : track.title;
 }
@@ -288,6 +277,8 @@ export default function PackCreator({
   const [lap3DraftTrackId, setLap3DraftTrackId] = useState<number | null>(null);
   const [lap3DraftVersion, setLap3DraftVersion] = useState<Lap3Version>("normal");
   const [lap3Query, setLap3Query] = useState("");
+  const [lap3TagQuery,setLap3TagQuery]=useState("");
+  const [lap3TagMode,setLap3TagMode]=useState<"all"|"any">("all");
   const [query, setQuery] = useState("");
   const [tagQuery, setTagQuery] = useState("");
   const [tagMatchMode, setTagMatchMode] = useState<"all" | "any">("all");
@@ -382,8 +373,9 @@ export default function PackCreator({
       .filter((track) =>
         [track.title, track.title_en, track.category].join(" ").toLocaleLowerCase().includes(keyword)
       )
+      .filter(track=>matchesTagSearch(track.tags,lap3TagQuery,lap3TagMode,tagAliasMap))
       .sort((a, b) => displayTrackTitle(a, language).localeCompare(displayTrackTitle(b, language)));
-  }, [tracks, lap3Query, language]);
+  }, [tracks, lap3Query, language, lap3TagQuery,lap3TagMode,tagAliasMap]);
 
   const lap3DraftTrack = lap3DraftTrackId != null ? trackMap.get(lap3DraftTrackId) : null;
   const lap3DraftValid = Boolean(lap3DraftTrack && brstmForVersion(lap3DraftTrack, lap3DraftVersion));
@@ -394,6 +386,7 @@ export default function PackCreator({
     setLap3DraftTrackId(existing?.trackId ?? null);
     setLap3DraftVersion(existing?.version ?? "normal");
     setLap3Query("");
+    setLap3TagQuery(tagQuery);setLap3TagMode(tagMatchMode);
   }
 
   function chooseLap3Track(track: PackTrack) {
@@ -493,59 +486,21 @@ export default function PackCreator({
         name: string;
         sourceLabel: string;
       }[] = [];
-      const missing: string[] = [];
       const outputNames = new Set<string>();
 
       for (const [key, slot] of uniqueSlots) {
         const track = trackMap.get(assignments[key]);
 
-        if (!track) continue;
+        if (!track) throw new Error(`${slot.ja}: 選択した曲が見つかりません / Selected track missing`);
 
-        if (!track.brstm_url) {
-          missing.push(
-            `${language === "ja" ? slot.ja : slot.en}: ${
-              language === "ja" ? "通常BRSTMなし" : "normal BRSTM missing"
-            }`
-          );
-          continue;
-        }
-
-        const normalName = `${slot.outputNormal}.brstm`;
-
-        if (!outputNames.has(normalName)) {
-          outputNames.add(normalName);
-          downloadJobs.push({
-            url: track.brstm_url,
-            name: normalName,
-            sourceLabel: displayTrackTitle(track, language),
-          });
-        }
-
-        if (slot.supportsLap3) {
-          const lap3Name = lap3OutputName(slot.outputNormal);
-          const override = lap3Overrides[key];
-          const lap3Track = override ? trackMap.get(override.trackId) : track;
-          const lap3Version = override?.version ?? "lap3";
-          const lap3Url = lap3Track ? brstmForVersion(lap3Track, lap3Version) : "";
-
-          if (lap3Url && lap3Name) {
-            const outputLap3 = `${lap3Name}.brstm`;
-
-            if (!outputNames.has(outputLap3)) {
-              outputNames.add(outputLap3);
-              downloadJobs.push({
-                url: lap3Url,
-                name: outputLap3,
-                sourceLabel: `${displayTrackTitle(lap3Track!, language)} (${lap3Version === "normal" ? "L1–2" : "L3"})`,
-              });
-            }
-          } else {
-            missing.push(
-              `${language === "ja" ? slot.ja : slot.en}: ${
-                language === "ja" ? "指定した3周目BRSTMなし" : "selected Lap 3 BRSTM missing"
-              }`
-            );
-          }
+        const override=lap3Overrides[key];
+        const lap3Track=override?trackMap.get(override.trackId):undefined;
+        if(override&&!lap3Track)throw new Error(`${track.title}: Lap3の曲が見つかりません / Lap3 track missing`);
+        const files=packFiles(track,slot.outputNormal,slot.supportsLap3,override&&lap3Track?{track:lap3Track,version:override.version}:undefined);
+        for(const file of files){
+          if(outputNames.has(file.name))continue;
+          outputNames.add(file.name);
+          downloadJobs.push({...file,sourceLabel:displayTrackTitle(track,language)});
         }
       }
 
@@ -572,10 +527,9 @@ export default function PackCreator({
           );
         }
 
-        entries.push({
-          name: job.name,
-          data: await response.arrayBuffer(),
-        });
+        const bytes=new Uint8Array(await response.arrayBuffer());
+        try{validateBrstm(bytes);}catch{throw new Error(`${job.name}: BRSTM音源を取得できませんでした / Invalid BRSTM audio`);}
+        entries.push({name:job.name,data:bytes});
       }
 
       setProgress(language === "ja" ? "ZIPを作成中..." : "Building ZIP...");
@@ -593,17 +547,7 @@ export default function PackCreator({
 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      if (missing.length > 0) {
-        setErrorMessage(
-          `${
-            language === "ja"
-              ? "ZIPは作成しましたが、以下は未収録です:"
-              : "ZIP created, but these files were missing:"
-          }\n${missing.join("\n")}`
-        );
-      } else {
-        setErrorMessage("");
-      }
+      setErrorMessage("");
     } catch (error) {
       console.error(error);
       setErrorMessage(
@@ -1093,6 +1037,10 @@ export default function PackCreator({
                   placeholder={language === "ja" ? "3周目に使う曲を検索" : "Search final-lap music"}
                   aria-label={language === "ja" ? "曲を検索" : "Search tracks"}
                 />
+                <div className={styles.lap3TagFilters}>
+                  <TagSearchInput className={styles.search} value={lap3TagQuery} onChange={setLap3TagQuery} suggestions={tagSearchSuggestions} language={language} placeholder={language==="ja"?"タグで絞り込み":"Filter by tags"}/>
+                  <select aria-label={language==="ja"?"Lap3タグの一致条件":"Lap3 tag matching"} value={lap3TagMode} onChange={event=>setLap3TagMode(event.target.value as "all"|"any")}><option value="all">{language==="ja"?"すべて含む":"Match all"}</option><option value="any">{language==="ja"?"1つでも一致":"Match any"}</option></select>
+                </div>
                 <div className={styles.lap3TrackList}>
                   {lap3Candidates.map((track) => (
                     <div

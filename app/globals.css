@@ -1018,3 +1018,5 @@ a {
   color: #a1a1aa;
   margin-right: 2px;
 }
+
+.bulkDeleteTools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px;margin-bottom:14px;border:1px solid #444;border-radius:8px}.bulkDeleteTools>strong{margin-right:auto}.bulkDeleteTools>p{width:100%;margin:0;font-size:12px}.bulkTrackCheck{margin-bottom:12px;align-self:flex-start}.bulkDeleteBackdrop{position:fixed;inset:0;z-index:1000;background:#000b;display:grid;place-items:center;padding:20px}.bulkDeleteDialog{background:#141416;border:1px solid #555;border-radius:10px;padding:22px;width:min(660px,100%);max-height:90dvh;overflow:auto}.bulkDeleteDialog h2{font-size:20px}.bulkDeleteDialog p{font-size:12px;color:#bbb}.bulkDeleteDialog ul{max-height:40dvh;overflow:auto;padding:0;list-style:none;margin:16px 0}.bulkDeleteDialog li{border-bottom:1px solid #333;padding:9px 0}.bulkDeleteDialog small{display:block;color:#aaa;margin-top:4px}.bulkDeleteDialog .adminActions{margin-top:18px}

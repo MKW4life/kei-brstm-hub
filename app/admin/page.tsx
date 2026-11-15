@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import KeiProjectRail from "@/components/KeiProjectRail";
 import AdminTagPicker from "@/components/AdminTagPicker";
+import AdminBulkDelete from "@/components/AdminBulkDelete";
 import AdminStorageUsage from "@/components/AdminStorageUsage";
 import { parseUploadFilename } from "@/lib/uploadFilename";
 import { isPreviewExtension, uploadContentType } from "@/lib/audioFiles";
@@ -618,6 +619,8 @@ export default function AdminPage() {
 
   const [checking, setChecking] = useState(true);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [selectedDeleteIds,setSelectedDeleteIds]=useState<number[]>([]);
+  const [bulkDeleteBusy,setBulkDeleteBusy]=useState(false);
   const [wavPendingIds, setWavPendingIds] = useState<number[]>([]);
   const [wavReviewReady, setWavReviewReady] = useState(false);
   const [wavReviewError, setWavReviewError] = useState("");
@@ -3302,8 +3305,10 @@ export default function AdminPage() {
           </p>
 
           <div className="adminTrackList">
+            <AdminBulkDelete tracks={tracks} matches={adminTrackMatches} visibleIds={visibleAdminTracks.map(track=>track.id)} selectedIds={selectedDeleteIds} onSelection={setSelectedDeleteIds} onDeleted={loadTracks} onBusyChange={setBulkDeleteBusy}/>
             {visibleAdminTracks.map((track) => (
               <article className="adminTrackCard" key={track.id} id={`admin-track-${track.id}`}>
+                <label className="checkboxLabel bulkTrackCheck"><input type="checkbox" aria-label={`${track.title}を一括削除対象に選択`} disabled={bulkDeleteBusy} checked={selectedDeleteIds.includes(track.id)} onChange={event=>setSelectedDeleteIds(current=>event.target.checked?[...new Set([...current,track.id])]:current.filter(id=>id!==track.id))}/>選択</label>
                 {editingTrackId === track.id ? (
                   <form className="adminForm" onSubmit={handleEditSubmit}>
                     <div className="formGrid">

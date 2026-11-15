@@ -713,3 +713,5 @@
   }
   .lap3Detail { flex: none; }
 }
+
+.lap3TagFilters{display:grid;grid-template-columns:minmax(0,1fr) 115px;gap:6px;margin:8px 0}.lap3TagFilters select{background:#18181b;color:#eee;border:1px solid #444;border-radius:7px;min-width:0;font-size:11px}.lap3TagFilters input{width:100%;min-width:0}
