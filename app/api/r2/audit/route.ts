@@ -1,53 +1,12 @@
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getR2Config, isAuthenticatedAdminRequest } from "@/lib/r2Server";
-import { auditStorage, type StoredObject, type FileReference } from "@/lib/r2Audit";
+import { auditStorage, type StoredObject } from "@/lib/r2Audit";
+
+import {loadReferences} from "@/lib/r2References";
+import {cleanupBlockedReason,signCleanupFile} from "@/lib/r2Cleanup";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
-
-async function loadReferences(request: Request, signal: AbortSignal) {
-  const references: FileReference[] = [];
-  const counts: Record<string, number> = {};
-  for (const [table, fields] of [
-    ["tracks", ["brstm_url", "preview_url", "brstm_lap3_url", "preview_lap3_url"]],
-    ["music_packs", ["zip_url"]],
-  ] as const) {
-    let offset = 0;
-    let total = 0;
-    do {
-      const url = new URL(`/rest/v1/${table}`, process.env.NEXT_PUBLIC_SUPABASE_URL);
-      url.searchParams.set("select", ["id", "title", ...fields].join(","));
-      url.searchParams.set("order", "id.asc");
-      const response = await fetch(url, {
-        headers: {
-          apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-          Authorization: request.headers.get("authorization")!,
-          Range: `${offset}-${offset + 499}`,
-          Prefer: "count=exact",
-        },
-        cache: "no-store",
-        signal,
-      });
-      if (!response.ok) throw new Error(`Cannot read ${table}: ${response.status}`);
-      const countText = response.headers.get("content-range")?.split("/")[1];
-      if (!countText || !/^\d+$/.test(countText)) throw new Error("Database count unavailable.");
-      total = Number(countText);
-      const rows = await response.json() as Record<string, unknown>[];
-      if (!Array.isArray(rows) || (rows.length === 0 && offset < total)) throw new Error("Incomplete database listing.");
-      for (const row of rows) {
-        for (const field of fields) {
-          if (typeof row[field] === "string" && row[field]) {
-            references.push({ url: row[field] as string, label: `${table} #${row.id} ${row.title} · ${field}` });
-          }
-        }
-      }
-      offset += rows.length;
-    } while (offset < total);
-    if (offset !== total) throw new Error("Database changed during audit. Retry.");
-    counts[table] = offset;
-  }
-  return { references, counts };
-}
 
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store" };
@@ -73,7 +32,9 @@ export async function GET(request: Request) {
       if (page.IsTruncated && (!token || seen.has(token))) throw new Error("Incomplete storage listing.");
       if (token) seen.add(token);
     } while (token);
-    return Response.json({ ...auditStorage(objects, references, publicBaseUrl), recordCounts: counts }, { headers });
+    const report=auditStorage(objects,references,publicBaseUrl);
+    const unused=report.unused.map(file=>{const reason=cleanupBlockedReason(file);return {...file,cleanupBlocked:reason,deleteProof:reason?undefined:signCleanupFile(file,process.env.R2_SECRET_ACCESS_KEY!)};});
+    return Response.json({...report,unused,recordCounts:counts},{headers});
   } catch (error) {
     console.error("Storage audit failed:", error);
     return Response.json({ error: "ファイル検査を完了できませんでした。時間をおいて再実行してください。" }, { status: 503, headers });

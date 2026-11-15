@@ -19,4 +19,5 @@
 .auditDetails ul { padding-left: 18px; }
 .auditDetails li { overflow-wrap: anywhere; margin: 8px 0; }
 .auditDetails pre { overflow: auto; max-height: 360px; padding: 12px; background: #18181b; }
+.cleanupTools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;font-size:12px}.cleanupFile{display:flex;align-items:flex-start;gap:8px}.cleanupFile input{margin-top:3px;flex-shrink:0}.cleanupFile small{display:block;color:#aaa;margin-top:4px}
 @media (max-width: 600px) { .panel { padding: 18px; } .heading h2 span { display: block; margin: 4px 0 0; } .figures { gap: 16px 24px; } }

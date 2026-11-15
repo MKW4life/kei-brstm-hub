@@ -75,7 +75,7 @@ export default function AdminStorageUsage() {
       </>}
       {error && <p role="alert" className={styles.warning}>{error}{usage ? " 表示値は前回取得時のものです。" : ""}</p>}
       <p className={styles.note}>10 GBは無料枠の目安で、保存容量の上限ではありません。実際の無料枠はアカウント全体の月平均使用量で計算されます。</p>
-      <AdminStorageAudit />
+      <AdminStorageAudit onChanged={refresh} />
     </section>
   );
 }
