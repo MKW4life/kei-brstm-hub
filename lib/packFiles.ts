@@ -26,10 +26,13 @@ export function validateBrstm(bytes: Uint8Array) {
   if(view.getUint16(4)!==0xfeff||view.getUint16(6)!==0x0100||view.getUint32(8)!==bytes.length)fail();
   const headerSize=view.getUint16(12),count=view.getUint16(14);
   if(count<2||count>3||headerSize<16+count*8||headerSize>bytes.length)fail();
+  // VGAudio writes EntryCount=2 but retains fixed HEAD/ADPC/DATA slots.
+  // Inspect the third slot when present, including its bounds and overlap checks.
+  const slots=count===2&&headerSize>=40&&(view.getUint32(32)!==0||view.getUint32(36)!==0)?3:count;
   const chunks=new Set<string>(),ranges:{start:number;end:number}[]=[];
-  for(let i=0;i<count;i++){
+  for(let i=0;i<slots;i++){
     const start=view.getUint32(16+i*8),size=view.getUint32(20+i*8),end=start+size;
-    if(count===3&&i===1&&start===0&&size===0)continue;
+    if(slots===3&&i===1&&start===0&&size===0)continue;
     if(start<headerSize||size<8||end>bytes.length||ranges.some(r=>start<r.end&&end>r.start))fail();
     const name=tag(start);
     if(!['HEAD','ADPC','DATA'].includes(name)||chunks.has(name))fail();

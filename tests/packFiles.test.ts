@@ -35,3 +35,18 @@ test('the generated archive contains both normal and Lap3 bytes under their fina
  while(view.getUint32(offset,true)===0x04034b50){const size=view.getUint32(offset+18,true),nameLength=view.getUint16(offset+26,true),extra=view.getUint16(offset+28,true);const start=offset+30+nameLength+extra;entries.push({name:new TextDecoder().decode(bytes.slice(offset+30,offset+30+nameLength)),last:bytes[start+size-1]});offset=start+size;}
  assert.deepEqual(entries,[{name:'n_farm_n.brstm',last:1},{name:'n_farm_f.brstm',last:2}]);
 });
+
+test('VGAudio BRSTM entry count 2 may still contain HEAD, ADPC and DATA slots',()=>{
+ const bytes=new Uint8Array(192),view=new DataView(bytes.buffer);
+ const tag=(offset:number,text:string)=>bytes.set(new TextEncoder().encode(text),offset);
+ tag(0,'RSTM');view.setUint16(4,0xfeff);view.setUint16(6,0x0100);view.setUint32(8,bytes.length);view.setUint16(12,64);view.setUint16(14,2);
+ for(const [i,name] of ['HEAD','ADPC','DATA'].entries()){
+  const offset=64+i*32,size=i===2?64:32;view.setUint32(16+i*8,offset);view.setUint32(20+i*8,size);tag(offset,name);view.setUint32(offset+4,size);
+ }
+ assert.doesNotThrow(()=>validateBrstm(bytes));
+ const broken=bytes.slice();new DataView(broken.buffer).setUint32(32,190);assert.throws(()=>validateBrstm(broken),/BRSTM/);
+ const overlap=bytes.slice();new DataView(overlap.buffer).setUint32(32,96);assert.throws(()=>validateBrstm(overlap),/BRSTM/);
+ const missing=bytes.slice();missing.fill(0,32,40);assert.throws(()=>validateBrstm(missing),/BRSTM/);
+ // PCM output uses the same fixed slots, with ADPC empty.
+ const pcm=bytes.slice();pcm.fill(0,24,32);assert.doesNotThrow(()=>validateBrstm(pcm));
+});
