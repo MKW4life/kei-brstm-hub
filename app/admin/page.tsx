@@ -622,11 +622,6 @@ export default function AdminPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedDeleteIds,setSelectedDeleteIds]=useState<number[]>([]);
   const [bulkDeleteBusy,setBulkDeleteBusy]=useState(false);
-  const [wavPendingIds, setWavPendingIds] = useState<number[]>([]);
-  const [wavReviewReady, setWavReviewReady] = useState(false);
-  const [wavReviewError, setWavReviewError] = useState("");
-  const [wavPendingOnly, setWavPendingOnly] = useState(false);
-  const [wavManifestSaving, setWavManifestSaving] = useState(false);
   const [packs, setPacks] = useState<MusicPack[]>([]);
   const [message, setMessage] = useState("");
   const [bulkGroups, setBulkGroups] = useState<BulkGroup[]>([]);
@@ -854,7 +849,6 @@ export default function AdminPage() {
       .replace(/^#/, "");
 
     return tracks
-      .filter((track) => !wavPendingOnly || wavPendingIds.includes(track.id))
       .filter((track) => {
         if (!keyword) return true;
 
@@ -872,7 +866,7 @@ export default function AdminPage() {
       .filter((track) =>
         matchesTagSearch(track.tags, adminTrackTagQuery, adminTrackTagMode)
       );
-  }, [tracks, adminTrackQuery, adminTrackTagQuery, adminTrackTagMode, tagAliasMap, wavPendingOnly, wavPendingIds]);
+  }, [tracks, adminTrackQuery, adminTrackTagQuery, adminTrackTagMode, tagAliasMap]);
 
   const missingPreviewTracks = useMemo(
     () => tracks.filter((track) => getMissingTrackPreviews(track).length > 0),
@@ -891,7 +885,7 @@ export default function AdminPage() {
   }, [missingPreviewTracks, missingPreviewQuery]);
 
   const hasAdminTrackFilter =
-    Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim()) || wavPendingOnly;
+    Boolean(adminTrackQuery.trim()) || Boolean(adminTrackTagQuery.trim());
 
   const adminTrackDefaultLimit = hasAdminTrackFilter ? 50 : 8;
   const visibleAdminTracks = showAllAdminTracks
@@ -1099,7 +1093,6 @@ export default function AdminPage() {
       .map((track) => track.id);
 
     setTracks(loadedTracks);
-    await loadWavReviewStatus();
 
     if (blankIds.length > 0) {
       const { error: tagError } = await supabase
@@ -1111,45 +1104,6 @@ export default function AdminPage() {
         console.warn("No tagの自動付与に失敗しました。", tagError);
       }
     }
-  }
-
-  async function loadWavReviewStatus() {
-    try {
-      const token = await getAdminAccessToken();
-      const response = await fetch("/api/admin/brstm-wav-review", {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-      });
-      const result = await response.json();
-      if (!response.ok || !Array.isArray(result.pendingIds)) throw new Error(result.error || "識別を取得できませんでした。");
-      setWavPendingIds(result.pendingIds);
-      setWavReviewError("");
-      setWavReviewReady(true);
-      return result;
-    } catch (error) {
-      setWavReviewReady(false);
-      setWavReviewError(error instanceof Error ? error.message : "識別を取得できませんでした。");
-      return null;
-    }
-  }
-
-  async function saveWavManifest() {
-    setWavManifestSaving(true);
-    try {
-      const result = await loadWavReviewStatus();
-      if (!Array.isArray(result?.pendingTracks)) return;
-      const manifest = {
-        version: 1, source: "Kei BRSTM Hub", selection: "WAV未変換",
-        exportedAt: new Date().toISOString(), capturedAt: result.capturedAt,
-        tracks: result.pendingTracks,
-      };
-      const url = URL.createObjectURL(new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `brstm-wav-unconverted-${manifest.exportedAt.slice(0, 10)}.json`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMessage(`WAV未変換の${manifest.tracks.length}曲の対象リストを保存しました。`);
-    } finally { setWavManifestSaving(false); }
   }
 
   async function loadPacks() {
@@ -3269,14 +3223,13 @@ export default function AdminPage() {
                 placeholder="曲名・英語名・カテゴリ・Loopなどで検索"
               />
 
-              {(adminTrackQuery || adminTrackTagQuery || wavPendingOnly) && (
+              {(adminTrackQuery || adminTrackTagQuery) && (
                 <button
                   className="secondaryButton"
                   type="button"
                   onClick={() => {
                     setAdminTrackQuery("");
                     setAdminTrackTagQuery("");
-                    setWavPendingOnly(false);
                   }}
                 >
                   クリア
@@ -3313,17 +3266,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <label className="formLabel checkboxLabel" style={{ marginBottom: "10px" }}>
-            <input type="checkbox" checked={wavPendingOnly} disabled={!wavReviewReady}
-              onChange={(event) => setWavPendingOnly(event.target.checked)} />
-            WAV未変換のみ{wavReviewReady ? `（${wavPendingIds.length}曲）` : "（識別を取得中）"}
-          </label>
-          {wavReviewError && <p className="formMessage" role="alert">{wavReviewError}</p>}
-          <button type="button" className="primaryButton" style={{ marginBottom: "12px" }}
-            disabled={!wavReviewReady || wavManifestSaving || !wavPendingIds.length}
-            onClick={() => void saveWavManifest()}>
-            {wavManifestSaving ? "対象リストを取得中…" : "WAV未変換の対象リストを保存"}
-          </button>
           <p className="formMessage" style={{ marginBottom: "14px" }}>
             {hasAdminTrackFilter
               ? `${adminTrackMatches.length}件ヒット（${visibleAdminTracks.length}曲表示）`
@@ -3496,9 +3438,6 @@ export default function AdminPage() {
                     <div>
                       <h3>
                         {track.title}
-                        {wavReviewReady && wavPendingIds.includes(track.id) && (
-                          <span className="wavPendingBadge" title="通常またはLap 3のBRSTMを置き換えると、この曲の識別を解除します。">WAV未変換</span>
-                        )}
                         {getMissingTrackPreviews(track).length > 0 && (
                           <span
                             className="previewMissingInline"
