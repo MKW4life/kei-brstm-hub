@@ -292,6 +292,7 @@ export default function PackCreator({
   const [tagQuery, setTagQuery] = useState("");
   const [tagMatchMode, setTagMatchMode] = useState<"all" | "any">("all");
   const [loopOnly, setLoopOnly] = useState(false);
+  const [bothVersionsOnly, setBothVersionsOnly] = useState(false);
   const [trackSort, setTrackSort] = useState<TrackSort>("titleAsc");
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
@@ -468,8 +469,11 @@ export default function PackCreator({
         matchesTagSearch(track.tags, tagQuery, tagMatchMode, tagAliasMap)
       )
       .filter((track) => !loopOnly || hasLoop(track))
+      .filter((track) =>
+        !bothVersionsOnly || (track.brstm_url?.trim() && track.brstm_lap3_url?.trim())
+      )
       .sort(compareTracks);
-  }, [tracks, query, tagQuery, tagMatchMode, tagAliasMap, loopOnly, compareTracks]);
+  }, [tracks, query, tagQuery, tagMatchMode, tagAliasMap, loopOnly, bothVersionsOnly, compareTracks]);
 
   const lap3Candidates = useMemo(() => {
     const keyword = lap3Query.trim().toLocaleLowerCase();
@@ -910,28 +914,22 @@ export default function PackCreator({
 
           {sortControl}
 
-          <button
-            type="button"
-            aria-pressed={loopOnly}
-            onClick={() => setLoopOnly((current) => !current)}
-            style={{
-              width: "100%",
-              marginTop: "8px",
-              minHeight: "36px",
-              borderRadius: "9px",
-              border: loopOnly
-                ? "1px solid rgba(87,217,140,0.62)"
-                : "1px solid rgba(255,255,255,0.10)",
-              background: loopOnly
-                ? "rgba(87,217,140,0.10)"
-                : "rgba(255,255,255,0.025)",
-              color: loopOnly ? "#57d98c" : "inherit",
-              fontWeight: 750,
-              cursor: "pointer",
-            }}
-          >
-            ↻ {language === "ja" ? "Loopのみ表示" : "Loop only"}
-          </button>
+          <div className={styles.trackFilters}>
+            <button
+              type="button"
+              aria-pressed={loopOnly}
+              onClick={() => setLoopOnly((current) => !current)}
+            >
+              ↻ {language === "ja" ? "Loopのみ表示" : "Loop only"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={bothVersionsOnly}
+              onClick={() => setBothVersionsOnly((current) => !current)}
+            >
+              {language === "ja" ? "通常版＋Lap 3あり" : "Normal + Lap 3 available"}
+            </button>
+          </div>
 
           <p className={styles.help}>
             {language === "ja"
@@ -940,6 +938,11 @@ export default function PackCreator({
           </p>
 
           <div className={styles.trackPalette}>
+            {filteredTracks.length === 0 && (
+              <p className={styles.help} role="status">
+                {language === "ja" ? "条件に合う曲がありません" : "No matching tracks"}
+              </p>
+            )}
             {filteredTracks.map((track) => (
               <div
                 key={track.id}

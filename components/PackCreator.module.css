@@ -72,6 +72,32 @@
   color: inherit;
 }
 
+.trackFilters {
+  display: flex;
+  flex-wrap: wrap;
+  flex: none;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.trackFilters button {
+  flex: 1 1 auto;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.trackFilters button[aria-pressed="true"] {
+  border-color: rgba(87, 217, 140, 0.62);
+  background: rgba(87, 217, 140, 0.10);
+  color: #57d98c;
+}
+
 .help {
   margin: 10px 0;
   font-size: 10px;
