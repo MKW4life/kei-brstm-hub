@@ -17,7 +17,16 @@ type PackTrack = {
   preview_url: string;
   brstm_lap3_url: string;
   preview_lap3_url: string;
+  created_at: string;
 };
+
+const trackSortLabels = {
+  newest: { ja: "新しい順", en: "Newest first" },
+  oldest: { ja: "古い順", en: "Oldest first" },
+  titleAsc: { ja: "曲名の昇順", en: "Title ascending" },
+  titleDesc: { ja: "曲名の降順", en: "Title descending" },
+};
+type TrackSort = keyof typeof trackSortLabels;
 
 type Lap3Version = "normal" | "lap3";
 type Lap3Override = { trackId: number; version: Lap3Version };
@@ -283,6 +292,7 @@ export default function PackCreator({
   const [tagQuery, setTagQuery] = useState("");
   const [tagMatchMode, setTagMatchMode] = useState<"all" | "any">("all");
   const [loopOnly, setLoopOnly] = useState(false);
+  const [trackSort, setTrackSort] = useState<TrackSort>("titleAsc");
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [progress, setProgress] = useState("");
@@ -409,6 +419,37 @@ export default function PackCreator({
     return map;
   }, [tagSearchSuggestions]);
 
+  const compareTracks = useMemo(() => {
+    const titleOrder = new Intl.Collator(language, { numeric: true });
+
+    return (a: PackTrack, b: PackTrack) => {
+      if (trackSort === "newest" || trackSort === "oldest") {
+        const aDate = Date.parse(a.created_at);
+        const bDate = Date.parse(b.created_at);
+        // Undated tracks stay at the end in both date orders.
+        if (Number.isFinite(aDate) !== Number.isFinite(bDate)) {
+          return Number.isFinite(aDate) ? -1 : 1;
+        }
+        if (Number.isFinite(aDate) && aDate !== bDate) {
+          return trackSort === "newest" ? bDate - aDate : aDate - bDate;
+        }
+      }
+      const byTitle = titleOrder.compare(displayTrackTitle(a, language), displayTrackTitle(b, language));
+      return (trackSort === "titleDesc" ? -byTitle : byTitle) || a.id - b.id;
+    };
+  }, [language, trackSort]);
+
+  const sortControl = (
+    <label className={styles.trackSort}>
+      {language === "ja" ? "並び順" : "Sort by"}
+      <select value={trackSort} onChange={(event) => setTrackSort(event.target.value as TrackSort)}>
+        {Object.entries(trackSortLabels).map(([value, labels]) => (
+          <option key={value} value={value}>{labels[language]}</option>
+        ))}
+      </select>
+    </label>
+  );
+
   const filteredTracks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
@@ -427,12 +468,8 @@ export default function PackCreator({
         matchesTagSearch(track.tags, tagQuery, tagMatchMode, tagAliasMap)
       )
       .filter((track) => !loopOnly || hasLoop(track))
-      .sort((a, b) =>
-        displayTrackTitle(a, language).localeCompare(
-          displayTrackTitle(b, language)
-        )
-      );
-  }, [tracks, query, tagQuery, tagMatchMode, tagAliasMap, loopOnly, language]);
+      .sort(compareTracks);
+  }, [tracks, query, tagQuery, tagMatchMode, tagAliasMap, loopOnly, compareTracks]);
 
   const lap3Candidates = useMemo(() => {
     const keyword = lap3Query.trim().toLocaleLowerCase();
@@ -442,8 +479,8 @@ export default function PackCreator({
         [track.title, track.title_en, track.category].join(" ").toLocaleLowerCase().includes(keyword)
       )
       .filter(track=>matchesTagSearch(track.tags,lap3TagQuery,lap3TagMode,tagAliasMap))
-      .sort((a, b) => displayTrackTitle(a, language).localeCompare(displayTrackTitle(b, language)));
-  }, [tracks, lap3Query, language, lap3TagQuery,lap3TagMode,tagAliasMap]);
+      .sort(compareTracks);
+  }, [tracks, lap3Query, lap3TagQuery, lap3TagMode, tagAliasMap, compareTracks]);
 
   const lap3DraftTrack = lap3DraftTrackId != null ? trackMap.get(lap3DraftTrackId) : null;
   const lap3DraftValid = Boolean(lap3DraftTrack && brstmForVersion(lap3DraftTrack, lap3DraftVersion));
@@ -871,6 +908,8 @@ export default function PackCreator({
             </select>
           </div>
 
+          {sortControl}
+
           <button
             type="button"
             aria-pressed={loopOnly}
@@ -1148,6 +1187,7 @@ export default function PackCreator({
                   <TagSearchInput className={styles.search} value={lap3TagQuery} onChange={setLap3TagQuery} suggestions={tagSearchSuggestions} language={language} placeholder={language==="ja"?"タグで絞り込み":"Filter by tags"}/>
                   <select aria-label={language==="ja"?"Lap3タグの一致条件":"Lap3 tag matching"} value={lap3TagMode} onChange={event=>setLap3TagMode(event.target.value as "all"|"any")}><option value="all">{language==="ja"?"すべて含む":"Match all"}</option><option value="any">{language==="ja"?"1つでも一致":"Match any"}</option></select>
                 </div>
+                {sortControl}
                 <div className={styles.lap3TrackList}>
                   {lap3Candidates.map((track) => (
                     <div
